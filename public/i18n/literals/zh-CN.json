@@ -2278,5 +2278,12 @@
   "每站点 9 个登录槽：各槽是独立的持久登录分区，可各自登录不同账号；换号 = 选另一槽开窗。": "每站点 9 个登录槽：各槽是独立的持久登录分区，可各自登录不同账号；换号 = 选另一槽开窗。",
   "用Google或Apple账户登录后，进入仪表盘，复制API Key添加至下方指定位置": "用Google或Apple账户登录后，进入仪表盘，复制API Key添加至下方指定位置",
   "登录（槽 {n}）· 独立持久会话分区": "登录（槽 {n}）· 独立持久会话分区",
-  "空槽": "空槽"
+  "空槽": "空槽",
+  "Commercial AI API aggregation relay gateway with the full set of standard OpenAI-compatible endpoints.": "AIHubMix 商业 API 聚合中转网关，全套标准 OpenAI 兼容接口。",
+  "UnoRouter AI API routing and midstream acceleration gateway.": "UnoRouter AI API 路由与中转加速网关。",
+  "CUN.AI (Cunxin) — an OpenAI-compatible model distribution platform for developers.": "CUN.AI (寸心) OpenAI 兼容模型分发平台。",
+  "docode — a dedicated API service for AI coding assistants and large models.": "docode AI 代码助手与大模型 API 专线服务。",
+  "CodeCraft API — a high-performance relay service for developer-oriented coding and agentic models.": "CodeCraft API 面向代码与智能体的高性能中转服务。",
+  "Experiential Labs — an AI model aggregation platform supporting frontier models and chain-of-thought passthrough.": "Experiential Labs AI 模型聚合平台，支持前沿模型与思维链透传。",
+  "50X AI — high-throughput, low-latency DeepSeek inference platform.": "50X AI 高吞吐、低延迟 DeepSeek 模型推理服务平台。"
 }

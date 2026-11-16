@@ -1515,5 +1515,40 @@
     },
     "timeoutMs": 120000,
     "format": "openai"
+  },
+  "aihubmix": {
+    "baseUrl": "https://aihubmix.com/v1/chat/completions",
+    "validateUrl": "https://aihubmix.com/v1/models",
+    "format": "openai"
+  },
+  "codecraft": {
+    "baseUrl": "https://codecraftapi.com/v1/chat/completions",
+    "validateUrl": "https://codecraftapi.com/v1/models",
+    "format": "openai"
+  },
+  "cun": {
+    "baseUrl": "https://www.cun.ai/v1/chat/completions",
+    "validateUrl": "https://www.cun.ai/v1/models",
+    "format": "openai"
+  },
+  "docode": {
+    "baseUrl": "https://docode.cc/v1/chat/completions",
+    "validateUrl": "https://docode.cc/v1/models",
+    "format": "openai"
+  },
+  "experiential": {
+    "baseUrl": "https://api.experientiallabs.ai/v1/chat/completions",
+    "validateUrl": "https://api.experientiallabs.ai/v1/models",
+    "format": "openai"
+  },
+  "fiftyx": {
+    "baseUrl": "https://api.ai.50x.energy/v1/chat/completions",
+    "validateUrl": "https://api.ai.50x.energy/v1/models",
+    "format": "openai"
+  },
+  "unorouter": {
+    "baseUrl": "https://api.unorouter.com/v1/chat/completions",
+    "validateUrl": "https://api.unorouter.com/v1/models",
+    "format": "openai"
   }
 }

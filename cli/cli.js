@@ -661,12 +661,45 @@ function startServer(updatePromise) {
   const CRASH_LOG_LINES = 50;
   let crashLog = [];
 
+  // The server is spawned detached so it can outlive this launcher — and the
+  // launcher does die routinely (closed terminal window, "hide" mode, an
+  // upgrade that replaces the package dir). A pipe for the child's stderr
+  // dies with the launcher: the server's next write raises EPIPE, which used
+  // to spin the server into an unhandled error loop that starved its event
+  // loop and left the dashboard hanging on a port that still looked alive.
+  // A file descriptor survives the launcher, so the child's stderr stays
+  // writable for the whole life of the server — and the crash output is still
+  // on disk for the restart banner.
+  function serverStderrFile() {
+    return path.join(getDataDir(), "logs", "server-stderr.log");
+  }
+
+  function openServerStderrFd() {
+    try {
+      fs.mkdirSync(path.dirname(serverStderrFile()), { recursive: true });
+      return fs.openSync(serverStderrFile(), "a");
+    } catch (e) {
+      return "ignore";
+    }
+  }
+
+  function readCrashLogTail() {
+    try {
+      const file = serverStderrFile();
+      if (!fs.existsSync(file)) return [];
+      const lines = fs.readFileSync(file, "utf-8").split("\n").filter(Boolean);
+      return lines.slice(-CRASH_LOG_LINES);
+    } catch (e) {
+      return [];
+    }
+  }
+
   function spawnServer() {
     serverStartTime = Date.now();
     crashLog = [];
     const child = spawn(RUNTIME, ["--dns-result-order=ipv4first", "--max-old-space-size=6144", serverPath], {
       cwd: standaloneDir,
-      stdio: showLog ? "inherit" : ["ignore", "ignore", "pipe"],
+      stdio: showLog ? "inherit" : ["ignore", "ignore", openServerStderrFd()],
       detached: true,
       windowsHide: true,
       env: {
@@ -678,13 +711,6 @@ function startServer(updatePromise) {
     // Pidfile: lets a later launcher run stop a server this process left behind
     // (an upgrade replaces the package dir under a detached server). Best-effort.
     if (child.pid) writePidFile(getDataDir(), child.pid);
-    if (!showLog && child.stderr) {
-      child.stderr.on("data", (data) => {
-        const lines = data.toString().split("\n").filter(Boolean);
-        crashLog.push(...lines);
-        if (crashLog.length > CRASH_LOG_LINES) crashLog = crashLog.slice(-CRASH_LOG_LINES);
-      });
-    }
     return child;
   }
 
@@ -931,6 +957,7 @@ function startServer(updatePromise) {
     restartCount++;
     const delay = Math.min(1000 * restartCount, 10000);
     console.error(t("launcher.crashedRestarting", { code: code ?? "unknown", seconds: delay / 1000, attempt: restartCount, max: MAX_RESTARTS }));
+    crashLog = readCrashLogTail();
     if (crashLog.length) {
       console.error(t("launcher.crashLogHeader"));
       crashLog.forEach(l => console.error(l));
