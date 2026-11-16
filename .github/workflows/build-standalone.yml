@@ -1,0 +1,92 @@
+name: Build & Release Standalone
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag (留空自动按版本号与当前日期生成)'
+        required: false
+        default: ''
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Next.js Standalone Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Next.js App
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NODE_OPTIONS: '--max-old-space-size=8192'
+        run: npm run build
+
+      - name: Assemble Standalone Package
+        run: |
+          mkdir -p dist/app dist/cli
+          # 1. 复制 standalone 产物（含点开头的文件，如 .next）
+          cp -r .next/standalone/. dist/app/
+          # 2. 关键防护：完整镜像 .next/server 与 .next/static，彻底防止 dynamic chunk (如 2812.js) 丢失报 500
+          mkdir -p dist/app/.next
+          cp -r .next/server dist/app/.next/
+          cp -r .next/static dist/app/.next/
+          # 3. 复制公共静态资源
+          cp -r public dist/app/
+          # 4. 复制 CLI 工具文件
+          cp -r cli/. dist/cli/
+          # 5. 打包为 zip
+          cd dist
+          zip -r ../10router-standalone.zip .
+          cd ..
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 10router-standalone
+          path: 10router-standalone.zip
+          retention-days: 14
+
+      - name: Determine Release Tag
+        id: vars
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            TAG="${{ github.event.inputs.release_tag }}"
+          elif [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            DATE=$(date +'%Y%m%d-%H%M')
+            TAG="v${VERSION}-${DATE}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: "10Router Standalone ${{ steps.vars.outputs.tag }}"
+          body: |
+            ## 🚀 10Router GitHub Actions 自动编译产物
+            - 包含完整的 Next.js Standalone 服务端与全量 server chunks
+            - 本地可通过 `update-from-github.ps1` 脚本一键拉取热更
+          files: 10router-standalone.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
