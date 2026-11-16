@@ -72,6 +72,13 @@ const PURE_BALANCE_PROVIDERS = new Set([
   "kimi",
   "azure",
   "step_plan",
+  "aihubmix",
+  "unorouter",
+  "cun",
+  "docode",
+  "codecraft",
+  "experiential",
+  "fiftyx",
 ]);
 
 const GATEWAY_FREE_PROVIDERS = new Set([

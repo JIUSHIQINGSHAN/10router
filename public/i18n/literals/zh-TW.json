@@ -1203,5 +1203,12 @@
   "Invalid project service AK": "專案服務 AK 無效",
   "Meoo account has no project; create one in Meoo first, then re-resolve the project AK": "Meoo 帳號還沒有專案：先在 meoo.com 建立一個（並開啟雲端服務），AK 會自動解析到位",
   "Manage multiple Loomy accounts in CreditDaddy — one-click copy & fill of invite codes, balances auto-synced to 10Router.": "多帳號推薦用 CreditDaddy 管理：一鍵複製 / 填寫邀請碼，餘額自動同步到 10Router。",
-  "用Google或Apple账户登录后，进入仪表盘，复制API Key添加至下方指定位置": "用Google或Apple賬戶登錄後，進入儀表盤，複製API Key添加至下方指定位置"
+  "用Google或Apple账户登录后，进入仪表盘，复制API Key添加至下方指定位置": "用Google或Apple賬戶登錄後，進入儀表盤，複製API Key添加至下方指定位置",
+  "Commercial AI API aggregation relay gateway with the full set of standard OpenAI-compatible endpoints.": "AIHubMix 商業 API 聚合中轉閘道，全套標準 OpenAI 相容介面。",
+  "UnoRouter AI API routing and midstream acceleration gateway.": "UnoRouter AI API 路由與中轉加速閘道。",
+  "CUN.AI (Cunxin) — an OpenAI-compatible model distribution platform for developers.": "CUN.AI (寸心) OpenAI 相容模型分發平台。",
+  "docode — a dedicated API service for AI coding assistants and large models.": "docode AI 程式碼助手與大型模型 API 專線服務。",
+  "CodeCraft API — a high-performance relay service for developer-oriented coding and agentic models.": "CodeCraft API 面向程式碼與智慧體的高效能中轉服務。",
+  "Experiential Labs — an AI model aggregation platform supporting frontier models and chain-of-thought passthrough.": "Experiential Labs AI 模型聚合平台，支援前沿模型與思維鏈透傳。",
+  "50X AI — high-throughput, low-latency DeepSeek inference platform.": "50X AI 高輸送量、低延遲 DeepSeek 模型推理服務平台。"
 }
