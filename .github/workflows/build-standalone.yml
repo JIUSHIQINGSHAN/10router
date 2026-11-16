@@ -50,7 +50,10 @@ jobs:
           cp -r .next/static dist/app/.next/
           # 3. 复制公共静态资源
           cp -r public dist/app/
-          # 4. 复制 CLI 工具文件
+          # 4. 复制 open-sse 与 mitm 源码（供独立进程动态调用）
+          cp -r open-sse dist/app/
+          cp -r src/mitm dist/app/
+          # 5. 复制 CLI 工具文件
           cp -r cli/. dist/cli/
           # 5. 打包为 zip
           cd dist
