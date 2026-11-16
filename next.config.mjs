@@ -58,6 +58,13 @@ const nextConfig = {
         path: false,
       };
     }
+    // Stub unneeded optional peer dependencies of @lobehub/icons (Avatar/Combine wrappers)
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@lobehub/ui": false,
+      antd: false,
+      "antd-style": false,
+    };
     // Exclude non-source dirs from watcher to reduce inotify load
     config.watchOptions = {
       ...config.watchOptions,
