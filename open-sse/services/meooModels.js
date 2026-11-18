@@ -73,7 +73,13 @@ function projectAkFrom(credentials) {
 }
 
 function normalizeModels(body) {
-  const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+  const rows = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.data)
+      ? body.data
+      : Array.isArray(body?.models)
+        ? body.models
+        : [];
   const models = [];
   const seen = new Set();
   for (const row of rows) {
