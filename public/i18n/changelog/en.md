@@ -4,6 +4,16 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ## Unreleased (ships with next release)
 
+### 🐛 Fixed
+
+- **Claude Code tool card switches unified**: the "Filter naming" and "Exa MCP" switches were raw browser checkboxes; they now use the same slide toggle as the rest of the dashboard. Behavior unchanged. (#153)
+
+- **Input placeholders now follow the UI language**: grey hint text in a few input boxes (sudo password, alias, chat input — 5 spots) stayed English after switching language; they now translate like everything else. (#154)
+
+- **Trae CN quota card expiry breakdown rebuilt**: credit packs are no longer merged by name into a few rows — they are now grouped by name + expiry date (same name & same day merge into one cell, soonest-expiring first). Fixes three problems: a merged row's "expires in 1d 22h" countdown only applied to its earliest sliver of credits, making the whole row look dead tomorrow; the monthly login grant was collapsed away so the "N resource packs" count disagreed with the rows shown; and the per-pack details just repeated the card body. The headline number and segmented bar stay the same; the details now list real expiry buckets.
+
+## v1.8.1 (2026-11-19)
+
 ### ✨ New
 
 - **Account session pool (desktop)**: multiple logged-in identities on the same site no longer bleed into each other — Chrome-style "account slots". Pick a slot in the in-shell login window, manage slots (open / clear / rename) in the dashboard's session-pool modal, and open any URL — including the "go to" menu and the service URL — in a chosen slot. **OAuth popups open per slot too**: flows that stall on a "Copy This URL" page (Google/Antigravity) now hand the callback back to the dashboard automatically inside the shell — no manual URL copying. 6 slots per site for now.
@@ -24,7 +34,7 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ### 📄 License
 
-- **License change: starting with the next release (v1.8.1), this project adopts AGPL-3.0** (previously MIT). Released versions up to v1.8.0 remain MIT. AGPL requires any reuse — including offering it as a network service — to be released under the same license, protecting this project's reverse-engineering work from being taken closed-source. Everyday use and self-hosting are unaffected; the MIT notice for upstream-derived portions is preserved per its terms.
+- **License change: starting with v1.8.1, this project adopts AGPL-3.0** (previously MIT). Released versions up to v1.8.0 remain MIT. AGPL requires any reuse — including offering it as a network service — to be released under the same license, protecting this project's reverse-engineering work from being taken closed-source. Everyday use and self-hosting are unaffected; the MIT notice for upstream-derived portions is preserved per its terms.
 
 ## v1.8.0 (2026-11-16)
 
