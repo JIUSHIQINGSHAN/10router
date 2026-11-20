@@ -1550,5 +1550,14 @@
     "baseUrl": "https://api.unorouter.com/v1/chat/completions",
     "validateUrl": "https://api.unorouter.com/v1/models",
     "format": "openai"
+  },
+  "nous": {
+    "baseUrl": "https://inference-api.nousresearch.com/v1/chat/completions",
+    "validateUrl": "https://inference-api.nousresearch.com/v1/models",
+    "headers": {},
+    "timeoutMs": 120000,
+    "format": "openai",
+    "clientId": "hermes-cli",
+    "tokenUrl": "https://portal.nousresearch.com/api/oauth/token"
   }
 }
