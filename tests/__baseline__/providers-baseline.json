@@ -1516,41 +1516,6 @@
     "timeoutMs": 120000,
     "format": "openai"
   },
-  "aihubmix": {
-    "baseUrl": "https://aihubmix.com/v1/chat/completions",
-    "validateUrl": "https://aihubmix.com/v1/models",
-    "format": "openai"
-  },
-  "codecraft": {
-    "baseUrl": "https://codecraftapi.com/v1/chat/completions",
-    "validateUrl": "https://codecraftapi.com/v1/models",
-    "format": "openai"
-  },
-  "cun": {
-    "baseUrl": "https://www.cun.ai/v1/chat/completions",
-    "validateUrl": "https://www.cun.ai/v1/models",
-    "format": "openai"
-  },
-  "docode": {
-    "baseUrl": "https://docode.cc/v1/chat/completions",
-    "validateUrl": "https://docode.cc/v1/models",
-    "format": "openai"
-  },
-  "experiential": {
-    "baseUrl": "https://api.experientiallabs.ai/v1/chat/completions",
-    "validateUrl": "https://api.experientiallabs.ai/v1/models",
-    "format": "openai"
-  },
-  "fiftyx": {
-    "baseUrl": "https://api.ai.50x.energy/v1/chat/completions",
-    "validateUrl": "https://api.ai.50x.energy/v1/models",
-    "format": "openai"
-  },
-  "unorouter": {
-    "baseUrl": "https://api.unorouter.com/v1/chat/completions",
-    "validateUrl": "https://api.unorouter.com/v1/models",
-    "format": "openai"
-  },
   "nous": {
     "baseUrl": "https://inference-api.nousresearch.com/v1/chat/completions",
     "validateUrl": "https://inference-api.nousresearch.com/v1/models",
@@ -1559,5 +1524,68 @@
     "format": "openai",
     "clientId": "hermes-cli",
     "tokenUrl": "https://portal.nousresearch.com/api/oauth/token"
+  },
+  "croli": {
+    "baseUrl": "https://ds.croli.net/v1/chat/completions",
+    "validateUrl": "https://ds.croli.net/v1/models",
+    "headers": {},
+    "timeoutMs": 120000,
+    "format": "openai",
+    "clientId": "znV4SkcUsY1AektQ",
+    "tokenUrl": "https://clerk.croli.net/oauth/token"
+  },
+  "crowllm": {
+    "baseUrl": "https://crowllm.com/v1/chat/completions",
+    "validateUrl": "https://crowllm.com/v1/models",
+    "headers": {},
+    "timeoutMs": 120000,
+    "format": "openai"
+  },
+  "capy": {
+    "baseUrl": "https://api.capy.ai/app",
+    "validateUrl": "https://api.capy.ai/app/me",
+    "format": "openai"
+  },
+  "aihubmix": {
+    "baseUrl": "https://aihubmix.com/v1/chat/completions",
+    "validateUrl": "https://aihubmix.com/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "codecraft": {
+    "baseUrl": "https://codecraftapi.com/v1/chat/completions",
+    "validateUrl": "https://codecraftapi.com/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "cun": {
+    "baseUrl": "https://www.cun.ai/v1/chat/completions",
+    "validateUrl": "https://www.cun.ai/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "docode": {
+    "baseUrl": "https://docode.cc/v1/chat/completions",
+    "validateUrl": "https://docode.cc/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "experiential": {
+    "baseUrl": "https://api.experientiallabs.ai/v1/chat/completions",
+    "validateUrl": "https://api.experientiallabs.ai/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "fiftyx": {
+    "baseUrl": "https://api.ai.50x.energy/v1/chat/completions",
+    "validateUrl": "https://api.ai.50x.energy/v1/models",
+    "thinkingFormat": "deepseek",
+    "format": "openai"
+  },
+  "unorouter": {
+    "baseUrl": "https://api.unorouter.com/v1/chat/completions",
+    "validateUrl": "https://api.unorouter.com/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
   }
 }

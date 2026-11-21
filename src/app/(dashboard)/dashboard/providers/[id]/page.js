@@ -29,6 +29,7 @@ import LingxiCaptureModal from "../components/LingxiCaptureModal";
 import SessionPoolModal from "./SessionPoolModal";
 import AddApiKeyModal from "./AddApiKeyModal";
 import LoomySmsModal from "../components/LoomySmsModal";
+import CapyLoginModal from "../components/CapyLoginModal";
 import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
 import BulkImportCodexModal from "./BulkImportCodexModal";
@@ -95,6 +96,7 @@ export default function ProviderDetailPage() {
   const [showSessionPool, setShowSessionPool] = useState(false);
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [showLoomySmsModal, setShowLoomySmsModal] = useState(false);
+  const [showCapyLoginModal, setShowCapyLoginModal] = useState(false);
   const [addConnectionError, setAddConnectionError] = useState("");
   const [showBulkImportCodex, setShowBulkImportCodex] = useState(false);
   const [showMeooImportApikey, setShowMeooImportApikey] = useState(false);
@@ -198,6 +200,11 @@ export default function ProviderDetailPage() {
   };
 
   const triggerAddConnection = () => {
+    // Capy has no browser-OAuth authorize URL: login is the dashboard email-code flow.
+    if (providerId === "capy") {
+      setShowCapyLoginModal(true);
+      return;
+    }
     if (isOAuth) {
       triggerOAuthConnection();
       return;
@@ -529,7 +536,7 @@ export default function ProviderDetailPage() {
   // "Fetch official catalog" import button scope: qoder family (live catalog)
   // and xiaomi-mimo (public /v1/models). mimo-x client previews are filtered
   // server-side in resolveMimoModels, so the import can never shadow them.
-  const supportsCatalogImport = providerId === "qoder" || providerId === "qoder-cn" || providerId === "xiaomi-mimo";
+  const supportsCatalogImport = providerId === "qoder" || providerId === "qoder-cn" || providerId === "xiaomi-mimo" || providerId === "crowllm";
   const models = providerId === "cursor" && liveModels.length > 0
     ? liveModels
     : isQoderFamily
@@ -1213,7 +1220,7 @@ export default function ProviderDetailPage() {
           mediaSkipped += 1;
           continue;
         }
-        
+
         // Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or
         // "auto" — strip whichever provider prefix the route attached.
         const cleanModelId = modelId.replace(/^qoder(-cn)?\//, "");
@@ -1243,6 +1250,34 @@ export default function ProviderDetailPage() {
       }
       if (mediaSkipped > 0) {
         notify.info(translate("Media models skipped (use Media Providers)") + ` (${mediaSkipped})`)
+      }
+
+      // CrowLLM stale sweep (user request 2026-11-21): the registry anchors all
+      // 40 :free ids, and the upstream delists free-promo models without
+      // notice — routing retries against a delisted id just burn 404s. Diff
+      // the anchored set against the fetched catalog and auto-disable the
+      // gone ones; the disable lives in the reversible disabled-table, so a
+      // model that returns can be re-enabled from the list.
+      if (providerId === "crowllm") {
+        const remoteIds = new Set(models.map((m) => m.id || m.name).filter(Boolean));
+        const staleIds = (staticModels || []).map((m) => m.id).filter((id) => id && !remoteIds.has(id));
+        if (staleIds.length > 0) {
+          try {
+            const dis = await fetch("/api/models/disabled", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ providerAlias: providerStorageAlias, ids: staleIds }),
+            });
+            if (dis.ok) {
+              notify.info(translate("Upstream no longer lists") + ` ${staleIds.length} ` + translate("models — auto-disabled (re-enable from the list if they return)"))
+            } else {
+              const d = await dis.json().catch(() => ({}));
+              notify.error(d.error || translate("Failed to disable models"))
+            }
+          } catch (e) {
+            notify.error(translate("Failed to disable models") + ": " + e.message)
+          }
+        }
       }
     } catch (error) {
       console.log("Error importing Qoder models:", error);
@@ -1954,7 +1989,7 @@ export default function ProviderDetailPage() {
             </span>
             {importingQoderModels
               ? translate("Fetching...")
-              : translate(providerId === "xiaomi-mimo" ? "Fetch MiMo Models" : "Fetch Qoder Models")}
+              : translate(providerId === "xiaomi-mimo" ? "Fetch MiMo Models" : providerId === "crowllm" ? "Fetch CrowLLM Models" : "Fetch Qoder Models")}
           </button>
         )}
 
@@ -2010,7 +2045,7 @@ export default function ProviderDetailPage() {
             BEFORE exposing it to clients, so a disabled row must be testable. #14-B */}
         {(disabledDisplayModels.length > 0 || disabledCustomModelRows.length > 0) && (
           <div className="w-full mt-2">
-            <p className="text-xs text-text-muted mb-2">Disabled models ({disabledDisplayModels.length + disabledCustomModelRows.length}):</p>
+            <p className="text-xs text-text-muted mb-2">{translate("Disabled models")} ({disabledDisplayModels.length + disabledCustomModelRows.length}):</p>
             <div className="flex flex-wrap gap-3">
               {disabledCustomModelRows.map((model) => (
                 <ModelRow
@@ -2981,6 +3016,13 @@ export default function ProviderDetailPage() {
         <LoomySmsModal
           isOpen
           onClose={() => setShowLoomySmsModal(false)}
+          onAdded={refreshAfterConnectionChange}
+        />
+      )}
+      {providerId === "capy" && showCapyLoginModal && (
+        <CapyLoginModal
+          isOpen
+          onClose={() => setShowCapyLoginModal(false)}
           onAdded={refreshAfterConnectionChange}
         />
       )}
