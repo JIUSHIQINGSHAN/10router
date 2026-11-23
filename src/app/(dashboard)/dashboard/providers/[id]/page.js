@@ -24,6 +24,7 @@ import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
 import ConnectionRow from "./ConnectionRow";
+import CroliCreditsPanel from "./CroliCreditsPanel";
 import DumateQrModal from "../components/DumateQrModal";
 import LingxiCaptureModal from "../components/LingxiCaptureModal";
 import SessionPoolModal from "./SessionPoolModal";
@@ -108,6 +109,7 @@ export default function ProviderDetailPage() {
   const [modelAliases, setModelAliases] = useState({});
   const [customModels, setCustomModels] = useState([]);
   const [oauthTransferEnabled, setOauthTransferEnabled] = useState(false); // per-provider toggle (falls back to legacy global)
+  const [croliAutoCheckin, setCroliAutoCheckin] = useState(false);
   const [codeBuddyCheckinEnabled, setCodeBuddyCheckinEnabled] = useState(false); // experimental auto daily check-in toggle
   const [codeBuddyCompensationEnabled, setCodeBuddyCompensationEnabled] = useState(false); // experimental auto compensation toggle
   // cbcn check-in manual trigger: running flag (per-account results go to the
@@ -505,6 +507,7 @@ export default function ProviderDetailPage() {
   // Must appear in every action row — single-auth providers (minimax-code is
   // OAuth-only) take the non-dual branch, which once lacked it.
   const hasClaimCheckin = ["qoder", "qoder-cn", "minimax-code", "minimax-code-global", "trae", "trae-cn"].includes(providerId);
+  const showCroliCredits = providerId === "croli";
   /**
    * The Export/Import button pair, hoisted out of the dual-auth-only branch.
    *
@@ -532,12 +535,19 @@ export default function ProviderDetailPage() {
   // catalog (price_factor flips to 0 during a free window, the promotion
   // object carries the 22:00–08:00 Asia/Singapore discount). Overlay them
   // onto the static rows so the badges reflect the account's real pricing.
-  const isQoderFamily = providerId === "qoder" || providerId === "qoder-cn";
+  // QwenWork 同款：目录行带 price_factor（0.1 档位 → 2.6 直通）——倍率徽章
+  // 让「付费模型」一目了然（用户 2026-11-22）。
+  const isQoderFamily = providerId === "qoder" || providerId === "qoder-cn"
+    || providerId === "qwenwork" || providerId === "qwenwork-cn";
   // "Fetch official catalog" import button scope: qoder family (live catalog)
   // and xiaomi-mimo (public /v1/models). mimo-x client previews are filtered
   // server-side in resolveMimoModels, so the import can never shadow them.
-  const supportsCatalogImport = providerId === "qoder" || providerId === "qoder-cn" || providerId === "xiaomi-mimo" || providerId === "crowllm";
-  const models = providerId === "cursor" && liveModels.length > 0
+  const supportsCatalogImport = providerId === "qoder" || providerId === "qoder-cn" || providerId === "xiaomi-mimo" || providerId === "crowllm" || providerId === "qwenwork" || providerId === "qwenwork-cn";
+  // QwenWork: the live catalog IS the model set (the client mirrors its own
+  // picker; the static roster's tier aliases / burned preview keys must not
+  // resurface next to the live rows — 2026-11-22 user report「完全搞乱了」).
+  const liveCatalogOnly = providerId === "cursor" || providerId === "qwenwork" || providerId === "qwenwork-cn";
+  const models = liveCatalogOnly && liveModels.length > 0
     ? liveModels
     : isQoderFamily
       ? mergeQoderLivePricing(staticModels, liveModels)
@@ -716,6 +726,7 @@ export default function ProviderDetailPage() {
       const nodesData = await nodesRes.json();
       const proxyPoolsData = await proxyPoolsRes.json();
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
+      if (providerId === "croli") setCroliAutoCheckin(settingsData.croliCheckin === true);
       if (connectionsRes.ok) {
         const filtered = (connectionsData.connections || []).filter(c => c.provider === providerId);
         setConnections(filtered);
@@ -1260,7 +1271,13 @@ export default function ProviderDetailPage() {
       // model that returns can be re-enabled from the list.
       if (providerId === "crowllm") {
         const remoteIds = new Set(models.map((m) => m.id || m.name).filter(Boolean));
-        const staleIds = (staticModels || []).map((m) => m.id).filter((id) => id && !remoteIds.has(id));
+        const anchoredIds = (staticModels || []).map((m) => m.id).filter(Boolean);
+        // 短返回不可信（上游抖动/部分故障）：拿 5/40 的目录去禁 35 个锚点是
+        // 误伤。只有目录覆盖过半锚点才认为快照可用，否则跳过本轮清扫。
+        const credible = remoteIds.size >= Math.ceil(anchoredIds.length / 2);
+        const staleIds = credible
+          ? anchoredIds.filter((id) => !remoteIds.has(id))
+          : [];
         if (staleIds.length > 0) {
           try {
             const dis = await fetch("/api/models/disabled", {
@@ -1989,7 +2006,7 @@ export default function ProviderDetailPage() {
             </span>
             {importingQoderModels
               ? translate("Fetching...")
-              : translate(providerId === "xiaomi-mimo" ? "Fetch MiMo Models" : providerId === "crowllm" ? "Fetch CrowLLM Models" : "Fetch Qoder Models")}
+              : translate(providerId === "xiaomi-mimo" ? "Fetch MiMo Models" : providerId === "crowllm" ? "Fetch CrowLLM Models" : providerId === "qwenwork" || providerId === "qwenwork-cn" ? "Fetch QwenWork Models" : "Fetch Qoder Models")}
           </button>
         )}
 
@@ -2788,6 +2805,7 @@ export default function ProviderDetailPage() {
                       {renderOAuthTransferButtons("w-full sm:w-auto")}
                       {codeBuddyCheckinOn && renderCbCheckinBlock()}
                       {hasClaimCheckin && renderQoderCheckinBlock()}
+                      {showCroliCredits && <CroliCreditsPanel connections={connections} initialAutoCheckin={croliAutoCheckin} />}
                     </>
                   ) : (
                     <>
@@ -2806,6 +2824,7 @@ export default function ProviderDetailPage() {
                       )}
                       {renderOAuthTransferButtons("w-full sm:w-auto")}
                       {hasClaimCheckin && renderQoderCheckinBlock()}
+                      {showCroliCredits && <CroliCreditsPanel connections={connections} initialAutoCheckin={croliAutoCheckin} />}
                     </>
                   )}
                 </div>

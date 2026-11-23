@@ -15,6 +15,7 @@ import { getGrokCliUsage } from "./usage/grok-cli.js";
 import { getKimiUsage } from "./usage/kimi.js";
 import { getDeepseekUsage } from "./usage/deepseek.js";
 import { getMeooUsage } from "./usage/meoo.js";
+import { getQwenWorkUsage } from "./usage/qwenwork.js";
 import { getDeepaiUsage } from "./usage/deepai.js";
 import { getLoomyUsage } from "./usage/loomy.js";
 import { getDumateUsage } from "./usage/dumate.js";
@@ -36,6 +37,7 @@ import { getCommandCodeUsage } from "./usage/commandcode.js";
 import { getMiniMaxCodeUsage } from "./usage/minimax-code.js";
 import { getCursorUsage } from "./usage/cursor.js";
 import { getTraeUsage } from "./usage/trae.js";
+import { getCroliUsage } from "./usage/croli.js";
 import { extractEarliestPackageExpiry } from "./usage/expiryExtractor.js";
 
 /**
@@ -61,6 +63,10 @@ const USAGE_HANDLERS = {
     const resolved = await resolveQoderCredentials(c, c.proxyOptions).catch(() => null);
     return getQoderUsage(resolved?.accessToken || c.accessToken, c.proxyOptions, "qoder-cn", c.providerSpecificData);
   },
+  // QwenWork: plan + credit quota from the account-context endpoint,
+  // read with the device token directly (no exchange layer).
+  qwenwork: (c) => getQwenWorkUsage(c.accessToken, "qwenwork", c.proxyOptions),
+  "qwenwork-cn": (c) => getQwenWorkUsage(c.accessToken, "qwenwork-cn", c.proxyOptions),
   iflow: (c) => getIflowUsage(c.accessToken),
   ollama: (c) => getOllamaUsage(c.apiKey, c.providerSpecificData, c.proxyOptions),
   // GLM 双认证：粘贴 apikey 或 OAuth 登录（coding-plan key 存在 accessToken 上）
@@ -133,6 +139,7 @@ const USAGE_HANDLERS = {
   // ——api.trae.ai 的 pay 端点 404（TLB 网关层不存在），数据只在官网 dashboard
   // 前端（网页会话线，未考古）。intl 连接给指路文案而不是空 "not implemented"。
   "trae-cn": (c) => getTraeUsage(c.accessToken, c.proxyOptions),
+  croli: (c) => getCroliUsage(c.accessToken, c.proxyOptions),
   trae: (c) =>
     String(c.providerSpecificData?.site || "").toLowerCase() === "cn"
       ? getTraeUsage(c.accessToken, c.proxyOptions)

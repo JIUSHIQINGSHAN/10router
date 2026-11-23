@@ -870,6 +870,30 @@ export const PROVIDER_CAPABILITIES = {
     // 双区 live 目录均已无 lmodel 且旧 key 实测 400 —— 行随注册表撤下；
     // 历史用量在类型图按 lmodel → qwen 归并（usageRepo CODENAME_FAMILIES）。
   }, { ...QODER_CN_NAME_ALIASES, "Auto": "auto" }),
+  // QwenWork （千问办公） — the "qwork" scene of the shared Qoder-family
+  // backend. Only the tier keys carry rows here: they are virtual routing
+  // tiers over the Qwen family — conservative superset, like qoder's auto,
+  // 1M context per the desktop client's catalog, thinkingCanDisable:false
+  // (thinking is fixed by the catalog entry's is_reasoning in model_config;
+  // the executor drops client thinking intent, same as qoder). Tier keys are
+  // the 2026-11-22 live-verified client catalog (client 1.3.x): intl rides
+  // qwork-* long names, CN uses flash/pro; the pre-replacement short scheme
+  // (lite/flash/pro/flagship + qwork-lite) and the burned Qoder-family
+  // codename qmodel_latest never existed client-side and carry no rows —
+  // their old rows made the capability audit flag them dead. The direct
+  // keys (qwen4-max, qwen3.8-max, glm-5.3-flash, …) deliberately carry NO
+  // row: they resolve from the canonical model rows like every other
+  // reseller (opencode-go etc.), so a model keeps one capability profile
+  // grid-wide.
+  "qwenwork": aliased({
+    "qwork-auto":        { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },
+    "qwork-advanced":    { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },
+    "qwork-ultimate":    { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },
+  }, { "标准": "qwork-auto", "高级": "qwork-advanced", "旗舰": "qwork-ultimate" }),
+  "qwenwork-cn": aliased({
+    "flash":             { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 }, // 标准（虚拟档）
+    "pro":               { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 }, // 高级（虚拟档）
+  }, { "标准": "flash", "高级": "pro" }),
   // ACE Music — acemusic.ai 托管的 ACE-Step 音乐生成（/v1/models 模型卡 2026-11-05）：
   // text+audio 进、audio+text 出；context_length 4096，输出上限未公布（取上下文内
   // 保守值）。无 vision/reasoning。音频整曲走 message.audio[]/delta.audio[]（OpenAI
@@ -943,6 +967,38 @@ export const PROVIDER_CAPABILITIES = {
     "glm-53":       { ...MODEL_CAPABILITIES["glm-5.3"] },
     "glm-53-flash": { ...MODEL_CAPABILITIES["glm-5.3-flash"] },
   },
+  // Amazon Quick — 三个 performanceMode 虚拟档（fast/smart/advanced），后端是
+  // Claude/GPT 混合路由（快=Haiku/Luna 级、均衡=Sonnet/Terra 级、智能=Opus/Sol
+  // 级），官方未公布逐档窗口 → 取混合族保守下限 200k/64k。vision 开（网页端聊天
+  // 支持图片附件）；search 开（agent 默认带网页搜索，chatOptions.disableWebSearch
+  // 默认 false）；thinkingCanDisable:false —— 线上没有客户端思考开关字段，档位
+  // 即模式，executor 不下发任何 thinking 意图，故不声明 thinkingFormat（留空 →
+  // 按 transport.format 派生），避免给混合后端钉死单一思考协议。
+  "amazonquick": {
+    "fast":     { vision: true, search: true, reasoning: true, thinkingCanDisable: false, contextWindow: 200000, maxOutput: 64000 }, // 快（虚拟档）
+    "smart":    { vision: true, search: true, reasoning: true, thinkingCanDisable: false, contextWindow: 200000, maxOutput: 64000 }, // 均衡（虚拟档，上游默认）
+    "advanced": { vision: true, search: true, reasoning: true, thinkingCanDisable: false, contextWindow: 200000, maxOutput: 64000 }, // 智能（虚拟档）
+  },
+  // Numes（numes.ai 推理市场）—— 模型 id 是 OpenRouter 形态的 `author/model`，
+  // 解析时剥掉 vendor 前缀走 canonical/pattern 表，绝大多数 id 无需 provider 行。
+  // 这里只钉住三类解析不掉/会错报的 id（对账源：numes GET /models 2026-11-23）：
+  //   · 点号形态的 Claude id —— canonical 表只有横杠键（claude-haiku-5-5），点号
+  //     落 `*claude*haiku*` 兜底被压成 200K/claude-budget（同 tokenharbor 的坑）；
+  //   · 腾讯 Hy 系 —— 两款 id 无任何 pattern 命中（只有 hy3*），会静默落地板；
+  //     数值与 codebuddy-cn 的同模型行一致（Hy 家族思考强制常开）；
+  //   · `:free` 变体 —— 冒号后缀使 canonical 精确键失配，裸落族 pattern：
+  //     deepseek-v4.1-flash:free 拿到 *deepseek-v4* 的 vision:false（图片被剥），
+  //     glm-5.3-flash:free 落 *glm-5.3* 同样丢 vision——按各自 canonical 同值钉回。
+  // thinkingFormat 一律 openai：numes 是纯 OpenAI Chat Completions 网关
+  // （docs/features/reasoning 明说收 reasoning_effort 简写），transport 层同值。
+  "numes": {
+    "anthropic/claude-haiku-5.5":        { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 128000 },
+    "tencent/hy4":                       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 64000 },
+    "tencent/hy4-flash":                 { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 960000, maxOutput: 64000 },
+    "deepseek/deepseek-v4.1-flash:free": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 384000 },
+    "z-ai/glm-5.3-flash:free":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+    "nvidia/nemotron-3-ultra-550b-a55b:free": { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 65536 },
+  },
 };
 
 // 传输/UI 别名与 provider id 共享同一张表（上游 89ffac5a）：combo 座位、gpt-6
@@ -973,7 +1029,12 @@ PROVIDER_CAPABILITIES["capy-ai"] = PROVIDER_CAPABILITIES.capy;
 // 同一模型换个拼写就回落到 DEFAULT 200k（vision/reasoning 被剥、窗口砍到 1/5）。
 PROVIDER_CAPABILITIES.qd = PROVIDER_CAPABILITIES.qoder;
 PROVIDER_CAPABILITIES.qdc = PROVIDER_CAPABILITIES["qoder-cn"];
+// QwenWork 的传输/UI 别名（qw = 国际，qwc = 国内）同理。
+PROVIDER_CAPABILITIES.qw = PROVIDER_CAPABILITIES.qwenwork;
+PROVIDER_CAPABILITIES.qwc = PROVIDER_CAPABILITIES["qwenwork-cn"];
 PROVIDER_CAPABILITIES.kgw = PROVIDER_CAPABILITIES["kilo-gateway"];
+// Amazon Quick 的传输/UI 别名 aq 同理。
+PROVIDER_CAPABILITIES.aq = PROVIDER_CAPABILITIES.amazonquick;
 PROVIDER_CAPABILITIES.kilogateway = PROVIDER_CAPABILITIES["kilo-gateway"];
 // DuMate 的传输/UI 别名 du（registry aliases:["du"]）与 id 共享同一张压缩拼写行，
 // 否则 du/qwen38-flash 会绕过 provider 行落回 *qwen* 兜底（同 qd/qdc 口径）。

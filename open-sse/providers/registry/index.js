@@ -177,13 +177,18 @@ import p174 from "./nous.js";
 import p175 from "./croli.js";
 import p176 from "./crowllm.js";
 import p177 from "./capy.js";
-import p178 from "./aihubmix.js";
-import p179 from "./codecraft.js";
-import p180 from "./cun.js";
-import p181 from "./docode.js";
-import p182 from "./experiential.js";
-import p183 from "./fiftyx.js";
-import p184 from "./unorouter.js";
+import p178 from "./amazonquick.js";
+import p179 from "./qwenwork.js";
+import p180 from "./qwenwork-cn.js";
+import p181 from "./numes.js";
+import p182 from "./atlascloud.js";
+import p183 from "./aihubmix.js";
+import p184 from "./codecraft.js";
+import p185 from "./cun.js";
+import p186 from "./docode.js";
+import p187 from "./experiential.js";
+import p188 from "./fiftyx.js";
+import p189 from "./unorouter.js";
 
 export default [
   p0,
@@ -371,4 +376,9 @@ export default [
   p182,
   p183,
   p184,
+  p185,
+  p186,
+  p187,
+  p188,
+  p189,
 ];

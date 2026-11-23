@@ -12,6 +12,14 @@ import { resolveOllamaLocalHost, PROVIDERS } from "open-sse/config/providers.js"
 import { getUsageForProvider } from "open-sse/services/usage.js";
 import { extractEarliestPackageExpiry } from "open-sse/services/usage/expiryExtractor.js";
 import { resolveQoderModels } from "open-sse/services/qoderModels.js";
+import {
+  amazonQuickListConversationsUrl,
+  buildAmazonQuickHeaders,
+  resolveAmazonQuickCredentials,
+} from "open-sse/shared/amazonquick/constants.js";
+import { AMAZONQUICK_TIERS } from "open-sse/services/amazonquickModels.js";
+import { resolveQwenWorkModels } from "open-sse/services/qwenworkModels.js";
+import { qwenworkSite } from "open-sse/shared/qwenwork/constants.js";
 import { fetchMeooPoints, resolveMeooProjectAk, getMeooControlKey } from "open-sse/services/meooAk.js";
 import { QODER_USERINFO_URL, QODER_CN_USERINFO_URL } from "open-sse/shared/qoder/constants.js";
 import { MODEL_LOCK_PREFIX } from "open-sse/services/accountFallback.js";
@@ -29,6 +37,7 @@ import {
   KIMCHI_CONFIG,
 } from "@/lib/oauth/constants/oauth";
 import { buildClineHeaders } from "@/shared/utils/clineAuth";
+import { testCroliConnection } from "./croliConnection.js";
 import { buildAccountValidationMessage } from "open-sse/utils/error.js";
 
 // OAuth provider test endpoints
@@ -728,6 +737,56 @@ async function testQoderConnection(connection, effectiveProxy = null, options = 
   }
 }
 
+async function testQwenWorkConnection(connection, effectiveProxy = null, options = {}) {
+  const { model } = options;
+
+  let catalog = null;
+  try {
+    // forceRefresh: a Test button must reflect the account NOW, not the 1h cache.
+    catalog = await resolveQwenWorkModels(connection, { proxyOptions: effectiveProxy, forceRefresh: true });
+  } catch {
+    catalog = null;
+  }
+
+  if (catalog && Array.isArray(catalog.models)) {
+    const nonEmpty = catalog.models.length > 0;
+    if (model) {
+      const available = catalog.models.some((m) => m.id === model);
+      return available
+        ? { valid: true, error: null, refreshed: false }
+        : { valid: false, error: `Model "${model}" is not available on this QwenWork account`, refreshed: false };
+    }
+    return nonEmpty
+      ? { valid: true, error: null, refreshed: false }
+      : { valid: false, error: "No models available on this QwenWork account", refreshed: false };
+  }
+
+  // Catalog unavailable (COSY signing needs a userId, or a transient
+  // failure): fall back to the account-context probe so a good token is
+  // not marked broken.
+  if (!connection.accessToken) return { valid: false, error: "No access token", refreshed: false };
+  const userinfoUrl = qwenworkSite(connection.provider).userInfoUrl;
+  try {
+    const res = await fetchWithConnectionProxy(
+      userinfoUrl,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${connection.accessToken}`, Accept: "application/json" },
+      },
+      effectiveProxy,
+    );
+    if (!res.ok) {
+      const revoked = res.status === 401 || res.status === 403;
+      return { valid: false, error: revoked ? "Token invalid or expired" : `QwenWork account-context error (${res.status})`, refreshed: false };
+    }
+    return model
+      ? { valid: true, warning: "Credential OK, but model availability could not be verified (catalog unavailable)", error: null, refreshed: false }
+      : { valid: true, error: null, refreshed: false };
+  } catch (err) {
+    return { valid: false, error: `QwenWork test failed: ${err.message}`, refreshed: false };
+  }
+}
+
 async function testOAuthConnection(connection, effectiveProxy = null, options = {}) {
   // Qoder's test is model-aware and needs the live catalog — handled here, not
   // via OAUTH_TEST_CONFIG (which qoder-cn was never in, so it answered "Provider
@@ -740,6 +799,10 @@ async function testOAuthConnection(connection, effectiveProxy = null, options = 
     // 「铸 session JWT → 列模型」两步链。专用探针顺带触发 clientJwt 轮换,
     // 新值随 newTokens 交回 testSingleConnection 持久化(与 capyRefreshHandler 同律)。
     return testCapyConnection(connection, effectiveProxy, options);
+  }
+  // QwenWork: same catalog-based test (see testQwenWorkConnection).
+  if (connection.provider === "qwenwork" || connection.provider === "qwenwork-cn") {
+    return testQwenWorkConnection(connection, effectiveProxy, options);
   }
   const config = OAUTH_TEST_CONFIG[connection.provider];
   if (!config) return { valid: false, error: "Provider test not supported", refreshed: false };
@@ -1101,6 +1164,32 @@ export async function testApiKeyConnection(connection, effectiveProxy = null, op
         const valid = res.status !== 401 && res.status !== 403 && res.status !== 404;
         return { valid, error: valid ? null : "Invalid API token or Account ID" };
       }
+      case "amazonquick": {
+        // Read-only probe, deliberately NOT a minimal chat: a chat turn
+        // burns the account's monthly agent hours, while ListConversations
+        // rides the same qbsproxy service + cookie session and validates
+        // all three credential values (cookie, awsAccountId, csrf) at once.
+        const creds = resolveAmazonQuickCredentials(connection);
+        if (creds.missing.length > 0) {
+          return { valid: false, error: `Missing credential field(s): ${creds.missing.join(", ")}` };
+        }
+        if (model && !AMAZONQUICK_TIERS.some((t) => t.id === model)) {
+          return { valid: false, error: `Model "${model}" is not an Amazon Quick tier (fast / smart / advanced)` };
+        }
+        const res = await fetchWithConnectionProxy(
+          amazonQuickListConversationsUrl(creds.awsAccountId, creds.csrf),
+          { method: "GET", headers: buildAmazonQuickHeaders(creds) },
+          effectiveProxy,
+        );
+        if (res.ok) return { valid: true, error: null };
+        const revoked = res.status === 401 || res.status === 403;
+        return {
+          valid: false,
+          error: revoked
+            ? "Session expired or invalid — paste a fresh Copy as cURL from a logged-in quick.aws.com tab"
+            : `Amazon Quick test failed (${res.status})`,
+        };
+      }
       case "azure": {
         const psd = connection.providerSpecificData || {};
         const endpoint = (psd.azureEndpoint || "").replace(/\/$/, "");
@@ -1261,6 +1350,24 @@ export async function testApiKeyConnection(connection, effectiveProxy = null, op
       case "siliconflow": {
         const res = await fetchWithConnectionProxy("https://api.siliconflow.com/v1/models", { headers: { Authorization: `Bearer ${connection.apiKey}` } }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
+      }
+      case "atlascloud": {
+        // /v1/models is public (200 with or without a key) and proves nothing
+        // about the credential — the gate is a minimal chat turn: 401/403 on a
+        // bad key (verified live 2026-11-23), anything else means the key
+        // authenticated. max_tokens 16 to clear any floor a reasoning model
+        // sets; one call per explicit "Check" press, ~free.
+        const res = await fetchWithConnectionProxy("https://api.atlascloud.ai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${connection.apiKey}` },
+          body: JSON.stringify({
+            model: model || "deepseek-ai/deepseek-v4-flash",
+            messages: [{ role: "user", content: "ping" }],
+            max_tokens: 16,
+          }),
+        }, effectiveProxy);
+        const authed = res.status !== 401 && res.status !== 403;
+        return { valid: authed, error: authed ? null : "Invalid API key" };
       }
       case "hyperbolic": {
         const res = await fetchWithConnectionProxy("https://api.hyperbolic.xyz/v1/models", { headers: { Authorization: `Bearer ${connection.apiKey}` } }, effectiveProxy);
@@ -1753,12 +1860,16 @@ export async function testSingleConnection(id, options = {}) {
   // sk- key → /models, session cookie → Preview model — lives in the apikey
   // path's provider switch. Route xiaomi-mimo there regardless of authType,
   // otherwise the Test button reports "Provider test not supported".
-  // Meoo routes here regardless of authType: the paste-key import stores
-  // authType "oauth" (line ~101 of import-apikey), but its probe is the
-  // two-stage chain in testMeooConnection, not OAUTH_TEST_CONFIG — which has
-  // no meoo entry and answered "Provider test not supported" for healthy
-  // accounts (2026-11-15 user report).
-  if (connection.provider === "meoo") {
+  // Croli verifies OAuth connectivity through its read-only balance endpoint;
+  // no model request is issued and no trial credits are spent.
+  if (connection.provider === "croli") {
+    result = await testCroliConnection(connection, effectiveProxy);
+  } else if (connection.provider === "meoo") {
+    // Meoo routes here regardless of authType: the paste-key import stores
+    // authType "oauth" (line ~101 of import-apikey), but its probe is the
+    // two-stage chain in testMeooConnection, not OAUTH_TEST_CONFIG — which has
+    // no meoo entry and answered "Provider test not supported" for healthy
+    // accounts (2026-11-15 user report).
     result = await testMeooConnection(connection, effectiveProxy, options);
   } else if (isKeyLike || connection.provider === "xiaomi-mimo" || connection.provider === "mimo-desktop") {
     result = await testApiKeyConnection(connection, effectiveProxy, options);

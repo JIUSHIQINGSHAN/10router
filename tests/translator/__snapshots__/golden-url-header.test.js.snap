@@ -259,6 +259,25 @@ exports[`GOLDEN buildHeaders (default executor providers) > assemblyai → heade
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > atlascloud → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > atria → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -1650,6 +1669,25 @@ exports[`GOLDEN buildHeaders (default executor providers) > nous → headers (ap
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > numes → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > nvidia → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -1809,6 +1847,44 @@ exports[`GOLDEN buildHeaders (default executor providers) > perplexity-agent →
 `;
 
 exports[`GOLDEN buildHeaders (default executor providers) > poolside → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > qwenwork → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > qwenwork-cn → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
     "Accept": "text/event-stream",
@@ -2443,6 +2519,13 @@ exports[`GOLDEN buildUrl (default executor providers) > assemblyai → url (stre
 }
 `;
 
+exports[`GOLDEN buildUrl (default executor providers) > atlascloud → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://api.atlascloud.ai/v1/chat/completions",
+  "stream": "https://api.atlascloud.ai/v1/chat/completions",
+}
+`;
+
 exports[`GOLDEN buildUrl (default executor providers) > atria → url (stream + non-stream) 1`] = `
 {
   "nonStream": "https://api.atria-asi.ai/v1/chat/completions",
@@ -2870,6 +2953,13 @@ exports[`GOLDEN buildUrl (default executor providers) > nous → url (stream + n
 }
 `;
 
+exports[`GOLDEN buildUrl (default executor providers) > numes → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://api.numes.ai/api/v1/chat/completions",
+  "stream": "https://api.numes.ai/api/v1/chat/completions",
+}
+`;
+
 exports[`GOLDEN buildUrl (default executor providers) > nvidia → url (stream + non-stream) 1`] = `
 {
   "nonStream": "https://integrate.api.nvidia.com/v1/chat/completions",
@@ -2930,6 +3020,20 @@ exports[`GOLDEN buildUrl (default executor providers) > poolside → url (stream
 {
   "nonStream": "https://inference.poolside.ai/v1/chat/completions",
   "stream": "https://inference.poolside.ai/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > qwenwork → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://gateway.qwenwork.ai/algo/api/v2/service/pro/sse/agent_chat_generation",
+  "stream": "https://gateway.qwenwork.ai/algo/api/v2/service/pro/sse/agent_chat_generation",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > qwenwork-cn → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://gateway.qwenwork.cn/algo/api/v2/service/pro/sse/agent_chat_generation",
+  "stream": "https://gateway.qwenwork.cn/algo/api/v2/service/pro/sse/agent_chat_generation",
 }
 `;
 

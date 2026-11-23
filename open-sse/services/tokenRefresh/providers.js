@@ -40,7 +40,7 @@ export async function refreshXaiToken(refreshToken, log) {
 // refresh_token_reused and revokes the whole session, so the rotated
 // pair must be persisted by the caller every time (the framework does)
 // and concurrent refreshes are deduped on the current token.
-export async function refreshNousToken(refreshToken, log) {
+export async function refreshNousToken(refreshToken, log, proxyOptions = null) {
   if (!refreshToken) return null;
   return dedupRefresh("nous", refreshToken, async () => {
     const oauth = PROVIDER_OAUTH["nous"] || {};
@@ -59,7 +59,7 @@ export async function refreshNousToken(refreshToken, log) {
           grant_type: "refresh_token",
           client_id: clientId,
         }),
-      });
+      }, proxyOptions);
       let data = null;
       try {
         data = await response.json();
@@ -85,6 +85,71 @@ export async function refreshNousToken(refreshToken, log) {
       return null;
     } catch (e) {
       log?.warn?.("TOKEN_REFRESH", `nous refresh failed: ${e?.message || e}`);
+      return null;
+    }
+  }, log);
+}
+
+// QwenWork （千问办公）: device-token refresh — POST { refresh_token,
+// target: "c" } as JSON to the deployment's /api/v1/deviceToken/refresh.
+// Refresh tokens are SINGLE-USE and rotating (same discipline as Nous):
+// the rotated pair must be persisted by the caller every time, and
+// concurrent refreshes are deduped on the current token. The response
+// carries the new pair in the device-flow shape ({ token, refresh_token,
+// expires_at / expires_in }), not the OAuth2 shape.
+export async function refreshQwenWorkToken(refreshToken, provider, log) {
+  if (!refreshToken) return null;
+  const oauth = PROVIDER_OAUTH[provider] || {};
+  const refreshUrl = oauth.refreshUrl;
+  if (!refreshUrl) return null;
+  return dedupRefresh(`qwenwork:${provider || "qwenwork"}`, refreshToken, async () => {
+    try {
+      const response = await proxyAwareFetch(refreshUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ refresh_token: refreshToken, target: "c" }),
+      });
+      let data = null;
+      try {
+        data = await response.json();
+      } catch {
+        /* non-JSON error body */
+      }
+      if (response.ok && data?.token) {
+        let expiresIn = typeof data.expires_in === "number" ? data.expires_in : undefined;
+        if (expiresIn === undefined && data.expires_at != null) {
+          const raw = data.expires_at;
+          const ms = typeof raw === "number" ? raw : /^\d+$/.test(String(raw).trim()) ? Number(raw) : Date.parse(raw);
+          if (Number.isFinite(ms) && ms > 0) expiresIn = Math.max(0, Math.floor((ms - Date.now()) / 1000));
+        }
+        // No parseable expiry (or one already in the past) would leave the
+        // stale expiresAt on the row — permanently "due", re-rotating the
+        // single-use refresh token on every request and background tick.
+        // Same fallback convention as QoderService.parseExpiry: 30 days.
+        if (!Number.isFinite(expiresIn) || expiresIn <= 0) expiresIn = 30 * 86400;
+        return {
+          accessToken: data.token,
+          refreshToken: data.refresh_token || refreshToken,
+          expiresIn,
+        };
+      }
+      const errCode = data?.errorCode || data?.error || "";
+      log?.warn?.("TOKEN_REFRESH", `qwenwork refresh failed: ${errCode || response.status}`);
+      if (
+        response.status === 401 ||
+        response.status === 403 ||
+        errCode === "INVALID_TOKEN" ||
+        errCode === "invalid_grant" ||
+        errCode === "invalid_request"
+      ) {
+        return { error: "invalid_grant" };
+      }
+      return null;
+    } catch (e) {
+      log?.warn?.("TOKEN_REFRESH", `qwenwork refresh failed: ${e?.message || e}`);
       return null;
     }
   }, log);
