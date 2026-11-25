@@ -16,7 +16,9 @@ import {
   refreshCodebuddyIntlToken,
   refreshMeooToken,
   refreshNousToken,
+  refreshJunieToken,
   refreshQwenWorkToken,
+  refreshAutoclawToken,
   refreshTraeToken,
   refreshClineToken,
   refreshZedToken,
@@ -40,7 +42,9 @@ export {
   refreshCodebuddyIntlToken,
   refreshMeooToken,
   refreshNousToken,
+  refreshJunieToken,
   refreshQwenWorkToken,
+  refreshAutoclawToken,
   refreshTraeToken,
   refreshClineToken,
   refreshZedToken,
@@ -201,9 +205,15 @@ const REFRESH_HANDLERS = {
   meoo: (c, log) => refreshMeooToken(c.refreshToken, c, log),
   // Nous Portal: header-carried single-use refresh token (see providers.js).
   nous: (c, log) => refreshNousToken(c.refreshToken, log),
+  // Junie: form refresh; the returned id_token is the credential (see providers.js).
+  junie: (c, log) => refreshJunieToken(c.refreshToken, log),
   // QwenWork: device-token refresh, single-use rotation (see providers.js).
   qwenwork: (c, log) => refreshQwenWorkToken(c.refreshToken, "qwenwork", log),
   "qwenwork-cn": (c, log) => refreshQwenWorkToken(c.refreshToken, "qwenwork-cn", log),
+  // AutoClaw: one refresher for both account systems — host order follows the
+  // refresh JWT's source_id, the connection's card is only the fallback.
+  autoclaw: (c, log) => refreshAutoclawToken(c.refreshToken, { region: "intl", log }),
+  "autoclaw-cn": (c, log) => refreshAutoclawToken(c.refreshToken, { region: "cn", log }),
   trae: (c, log) => refreshTraeToken(c.refreshToken, c, log),
   // #99 拆线：国内站条目共用同一刷新器——站点由连接 psd.site 决定 origins
   "trae-cn": (c, log) => refreshTraeToken(c.refreshToken, c, log),

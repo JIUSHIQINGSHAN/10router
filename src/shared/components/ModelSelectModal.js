@@ -19,15 +19,22 @@ const PROVIDER_ORDER = [
   ...Object.keys(APIKEY_PROVIDERS),
 ];
 
-// Providers that need no auth — always show in model selector (exclude hidden ones)
+// Providers that need no auth — candidates for the model selector (exclude
+// registry-hidden ones). Whether each actually appears is decided per-mount by
+// the user's topology visibility (see isTopologyVisibleFor below): the picker
+// must agree with the providers page / usage topology canvas, so a noAuth
+// channel the user hid from the topology (or that defaults hidden) must not
+// resurface here.
 const NO_AUTH_PROVIDER_IDS = Object.keys(FREE_PROVIDERS).filter(
   (id) => FREE_PROVIDERS[id].noAuth && !FREE_PROVIDERS[id].hidden
 );
 
 // 需要按账号拉取 live 目录的供应商（Cursor 的可选模型随账号订阅浮动；Zed 的
-// 静态 registry 目录是空的、靠 passthrough 透传，由 modelsUrl 实时下发）。静态
+// 静态 registry 目录是空的、靠 passthrough 透传，由 modelsUrl 实时下发；
+// QwenWork 的目录按账号套餐浮动且静态表只是兜底 —— 用户手建别名只有 4 个时
+// 组合选择器会远落后于详情页的 live 目录，2026-11-23 用户报）。静态
 // 目录只作拉取失败/为空时的兜底 —— 不同账号可能拿到不同的模型清单。
-const LIVE_CATALOG_PROVIDERS = ["cursor", "zed"];
+const LIVE_CATALOG_PROVIDERS = ["cursor", "zed", "qwenwork", "qwenwork-cn"];
 
 export default function ModelSelectModal({
   isOpen,
@@ -63,8 +70,24 @@ export default function ModelSelectModal({
   const [providerNodes, setProviderNodes] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [disabledModels, setDisabledModels] = useState({});
+  // 拓扑可见性（与供应商页 / 用量拓扑同一口径，2026-11-23 用户报）：noAuth
+  // 免费渠道此前无条件进选择器，用户在拓扑里藏掉后仍会冒出来。
+  const [topologyVisibility, setTopologyVisibility] = useState({});
+  const [showCommunityProviders, setShowCommunityProviders] = useState(true);
   // live 目录按供应商分组缓存：{ [providerId]: models }
   const [liveCatalogModels, setLiveCatalogModels] = useState({});
+
+  // noAuth 渠道的拓扑可见性 — 与 providers/page.js 的 topologyVisibleFor 和
+  // UsageStats 的 isTopologyVisible 完全同语义（三处必须一起改）：
+  // setting===false 隐藏 / setting===true 显示 / 未设置看 topologyHiddenByDefault。
+  const isTopologyVisibleFor = (info, id) => {
+    const setting = topologyVisibility?.[id];
+    return setting === false
+      ? false
+      : setting === true
+        ? true
+        : !info.topologyHiddenByDefault;
+  };
 
   // 每个 live 供应商取它所有已连接账号的 connection id。
   const liveConnectionIdsByProvider = useMemo(() => {
@@ -188,6 +211,24 @@ export default function ModelSelectModal({
     if (isOpen) fetchDisabledModels();
   }, [isOpen]);
 
+  // 拓扑可见性设置（2026-11-23 用户报）：选择器与供应商页/拓扑图口径统一，
+  // 失败时保持默认（community 显示、无隐藏）—— 宁多显示不可静默吞渠道。
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch("/api/settings", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to fetch settings: ${res.status}`);
+      const s = await res.json();
+      setTopologyVisibility(s?.topologyVisibility || {});
+      setShowCommunityProviders(s?.showCommunityProviders !== false);
+    } catch (error) {
+      console.error("Error fetching settings for selector:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchSettings();
+  }, [isOpen]);
+
   const allProviders = useMemo(() => ({ ...OAUTH_PROVIDERS, ...FREE_PROVIDERS, ...FREE_TIER_PROVIDERS, ...APIKEY_PROVIDERS }), []);
 
   // Group models by provider with priority order
@@ -221,10 +262,16 @@ export default function ModelSelectModal({
       .filter((p) => p.isActive !== false)
       .map((p) => p.provider);
 
-    // No-auth providers: filter by kindFilter as well
-    const noAuthIds = kindFilter
-      ? NO_AUTH_PROVIDER_IDS.filter((id) => (AI_PROVIDERS[id]?.serviceKinds || ["llm"]).includes(kindFilter))
-      : NO_AUTH_PROVIDER_IDS;
+    // No-auth providers: topology visibility first (same semantics as the
+    // providers page toggle / usage topology — hidden there, hidden here),
+    // then the community toggle (公益站), then kindFilter.
+    const noAuthIds = NO_AUTH_PROVIDER_IDS.filter((id) => {
+      const info = AI_PROVIDERS[id];
+      if (!isTopologyVisibleFor(info, id)) return false;
+      if (!showCommunityProviders && info?.community === true) return false;
+      if (kindFilter) return (info?.serviceKinds || ["llm"]).includes(kindFilter);
+      return true;
+    });
 
     // Connected providers + no-auth providers
     const connectedIds = new Set([
@@ -232,11 +279,15 @@ export default function ModelSelectModal({
       ...noAuthIds,
     ]);
 
-    // Unconnected standard providers that match kindFilter
+    // Unconnected standard providers that match kindFilter. A topology-hidden
+    // noAuth provider must not slip back in here: it leaves noAuthIds above,
+    // and without this guard it would resurface as an "unconnected" group.
     const unconnectedIds = Object.keys(allProviders).filter((id) => {
       if (connectedIds.has(id)) return false;
       const p = allProviders[id];
       if (!p || p.hidden) return false;
+      if (p.noAuth && !isTopologyVisibleFor(p, id)) return false;
+      if (p.noAuth && !showCommunityProviders && p.community === true) return false;
       if (kindFilter) {
         const kinds = p.serviceKinds || ["llm"];
         return kinds.includes(kindFilter);
@@ -317,7 +368,35 @@ export default function ModelSelectModal({
             .filter((m) => !getModelKind(m) || getModelKind(m) === "llm")
             .map((m) => ({ id: m.id, name: m.name, value: `${alias}/${m.id}`, kind: getModelKind(m) }))
             .filter((m) => !seen.has(m.value));
+          for (const m of hardcoded) seen.add(m.value);
           combined = [...registeredLlms, ...aliasModels.filter((m) => !registeredLlms.some((registered) => registered.value === m.value)), ...hardcoded];
+          // Live 目录补位（qwenwork 等，2026-11-23 用户报）：passthrough 供应商的
+          // 组合选择器此前只出别名+自定义+静态表 —— 别名是用户手建的（qwenwork 只建
+          // 过 4 个），远落后于详情页的 live 目录。live 行 id 以裸键为主
+          // （qwen4-max）；带 provider 前缀的旧形态（qwenwork-cn/flash，2026-11-23
+          // 之前的 route 行为）剥掉再拼，两种形态都归一到本供应商 alias 下的
+          // value（<alias>/<modelKey>，与路由一致）；按 value 去重，别名/custom
+          // 优先。拉取失败/为空时保持现状，不清空可选池。
+          const providerLiveModels = (liveCatalogModels[providerId] || []).filter((m) => m?.id);
+          if (providerLiveModels.length > 0) {
+            const livePrefix = `${providerId}/`;
+            combined = combined.concat(
+              providerLiveModels
+                .map((m) => {
+                  const modelKey = m.id.startsWith(livePrefix) ? m.id.slice(livePrefix.length) : m.id;
+                  return {
+                    id: modelKey,
+                    name: m.name || modelKey,
+                    value: `${alias}/${modelKey}`,
+                    rateMultiplier: m.rateMultiplier,
+                    originalRateMultiplier: m.originalRateMultiplier,
+                    promotion: m.promotion,
+                    isLive: true,
+                  };
+                })
+                .filter((m) => !seen.has(m.value)),
+            );
+          }
         }
 
         if (combined.length > 0) {
@@ -475,7 +554,7 @@ export default function ModelSelectModal({
     });
 
     return groups;
-  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, liveCatalogModels]);
+  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, liveCatalogModels, topologyVisibility, showCommunityProviders]);
 
   // Filter combos by search query (and hide combos when kindFilter is set — combos are LLM-only by design)
   const filteredCombos = useMemo(() => {
@@ -717,6 +796,20 @@ export default function ModelSelectModal({
                       ) : (
                         <>
                           {model.name}
+                          {/* live 目录行的倍率徽章（详情页 ModelRow 同口径）：
+                              0x 或激活的 promotion → 绿 free；其余带倍率出 Nx。 */}
+                          {model.isLive && typeof model.rateMultiplier === "number" && (
+                            <span
+                              className={`shrink-0 rounded px-1 text-[9px] font-normal leading-none ${
+                                model.rateMultiplier === 0 || model.promotion
+                                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                                  : "bg-surface-2 text-text-muted font-mono"
+                              }`}
+                              title={`${translate("Credit multiplier")}: ${model.rateMultiplier}x${model.originalRateMultiplier ? ` — ${translate("standard rate")} ${model.originalRateMultiplier}x` : ""}`}
+                            >
+                              {model.rateMultiplier === 0 || model.promotion ? "free" : `${model.rateMultiplier.toFixed(2)}x`}
+                            </span>
+                          )}
                           <CapacityBadges caps={getCaps(model.value)} />
                         </>
                       )}

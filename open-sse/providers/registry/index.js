@@ -189,6 +189,9 @@ import p186 from "./docode.js";
 import p187 from "./experiential.js";
 import p188 from "./fiftyx.js";
 import p189 from "./unorouter.js";
+import p190 from "./junie.js";
+import p191 from "./autoclaw.js";
+import p192 from "./autoclaw-cn.js";
 
 export default [
   p0,
@@ -381,4 +384,7 @@ export default [
   p187,
   p188,
   p189,
+  p190,
+  p191,
+  p192,
 ];

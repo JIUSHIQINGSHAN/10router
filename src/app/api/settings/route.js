@@ -130,6 +130,7 @@ export async function PATCH(request) {
     if (
       Object.prototype.hasOwnProperty.call(body, "comboStrategy") ||
       Object.prototype.hasOwnProperty.call(body, "comboStickyRoundRobinLimit") ||
+      Object.prototype.hasOwnProperty.call(body, "comboStickyWindowMinutes") ||
       Object.prototype.hasOwnProperty.call(body, "comboStrategies")
     ) {
       resetComboRotation();
@@ -195,6 +196,19 @@ export async function PATCH(request) {
         import("@/sse/services/traeCheckin.js")
           .then(({ stopTraeCheckin }) => stopTraeCheckin())
           .catch((error) => console.warn("[TraeCheckin] stop failed:", error.message));
+      }
+    }
+
+    // Auto daily check-in for AutoClaw（智谱澳龙，intl + CN; task-center daily_signin）
+    if (Object.prototype.hasOwnProperty.call(body, "autoclawCheckin")) {
+      if (settings.autoclawCheckin === true) {
+        import("@/sse/services/autoclawCheckin.js")
+          .then(({ startAutoclawCheckin }) => startAutoclawCheckin())
+          .catch((error) => console.warn("[AutoclawCheckin] start failed:", error.message));
+      } else {
+        import("@/sse/services/autoclawCheckin.js")
+          .then(({ stopAutoclawCheckin }) => stopAutoclawCheckin())
+          .catch((error) => console.warn("[AutoclawCheckin] stop failed:", error.message));
       }
     }
 

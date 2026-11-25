@@ -31,6 +31,8 @@ import SessionPoolModal from "./SessionPoolModal";
 import AddApiKeyModal from "./AddApiKeyModal";
 import LoomySmsModal from "../components/LoomySmsModal";
 import CapyLoginModal from "../components/CapyLoginModal";
+import AutoclawSmsModal from "../components/AutoclawSmsModal";
+import AutoclawOAuthModal from "../components/AutoclawOAuthModal";
 import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
 import BulkImportCodexModal from "./BulkImportCodexModal";
@@ -98,6 +100,8 @@ export default function ProviderDetailPage() {
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [showLoomySmsModal, setShowLoomySmsModal] = useState(false);
   const [showCapyLoginModal, setShowCapyLoginModal] = useState(false);
+  const [showAutoclawSmsModal, setShowAutoclawSmsModal] = useState(false);
+  const [showAutoclawOAuthModal, setShowAutoclawOAuthModal] = useState(false);
   const [addConnectionError, setAddConnectionError] = useState("");
   const [showBulkImportCodex, setShowBulkImportCodex] = useState(false);
   const [showMeooImportApikey, setShowMeooImportApikey] = useState(false);
@@ -205,6 +209,17 @@ export default function ProviderDetailPage() {
     // Capy has no browser-OAuth authorize URL: login is the dashboard email-code flow.
     if (providerId === "capy") {
       setShowCapyLoginModal(true);
+      return;
+    }
+    // AutoClaw CN has no OAuth link either: +86 phone SMS two-step login.
+    if (providerId === "autoclaw-cn") {
+      setShowAutoclawSmsModal(true);
+      return;
+    }
+    // AutoClaw intl: the account plane mints the authorize URL only after an
+    // Aliyun slider captcha solved in the user's browser — dedicated modal.
+    if (providerId === "autoclaw") {
+      setShowAutoclawOAuthModal(true);
       return;
     }
     if (isOAuth) {
@@ -1234,7 +1249,9 @@ export default function ProviderDetailPage() {
 
         // Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or
         // "auto" — strip whichever provider prefix the route attached.
-        const cleanModelId = modelId.replace(/^qoder(-cn)?\//, "");
+        // qwenwork(-cn) rows too: the route prefixed its ids until
+        // 2026-11-23 and a cached response can still deliver them.
+        const cleanModelId = modelId.replace(/^(?:qoder(-cn)?|qwenwork(-cn)?)\//, "");
         // Models already listed as official registry entries are NOT re-added
         // as customs — the fetch button exists to pull in catalog newcomers
         // (e.g. q37fmodel before it was registered), not to duplicate the
@@ -3042,6 +3059,20 @@ export default function ProviderDetailPage() {
         <CapyLoginModal
           isOpen
           onClose={() => setShowCapyLoginModal(false)}
+          onAdded={refreshAfterConnectionChange}
+        />
+      )}
+      {providerId === "autoclaw" && showAutoclawOAuthModal && (
+        <AutoclawOAuthModal
+          isOpen
+          onClose={() => setShowAutoclawOAuthModal(false)}
+          onAdded={refreshAfterConnectionChange}
+        />
+      )}
+      {providerId === "autoclaw-cn" && showAutoclawSmsModal && (
+        <AutoclawSmsModal
+          isOpen
+          onClose={() => setShowAutoclawSmsModal(false)}
           onAdded={refreshAfterConnectionChange}
         />
       )}

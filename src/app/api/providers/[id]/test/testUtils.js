@@ -20,7 +20,14 @@ import {
 import { AMAZONQUICK_TIERS } from "open-sse/services/amazonquickModels.js";
 import { resolveQwenWorkModels } from "open-sse/services/qwenworkModels.js";
 import { qwenworkSite } from "open-sse/shared/qwenwork/constants.js";
+import {
+  JUNIE_CHAT_URL,
+  JUNIE_FREE_HEADERS,
+  JUNIE_UPSTREAM_MODEL,
+} from "open-sse/shared/junie/constants.js";
 import { fetchMeooPoints, resolveMeooProjectAk, getMeooControlKey } from "open-sse/services/meooAk.js";
+import { autoclawPost, autoclawRegionFor, autoclawRegionConfig, isAutoclawDeadLogin } from "open-sse/shared/autoclaw/client.js";
+import { AUTOCLAW_PATHS } from "open-sse/shared/autoclaw/constants.js";
 import { QODER_USERINFO_URL, QODER_CN_USERINFO_URL } from "open-sse/shared/qoder/constants.js";
 import { MODEL_LOCK_PREFIX } from "open-sse/services/accountFallback.js";
 import {
@@ -787,6 +794,152 @@ async function testQwenWorkConnection(connection, effectiveProxy = null, options
   }
 }
 
+// Junie (JetBrains) free lane: the credential is the JBA id_token
+// (stored in the accessToken slot) and the lane exposes no /models or
+// userinfo probe — the cheapest truthful test is one minimal
+// non-streaming chat completion (max_tokens 1; the free lane has no
+// metered quota). An expired/401 id_token is refreshed once through the
+// rotating refresh token and the new pair rides back via newTokens so
+// the caller persists it (refresh tokens are single-use).
+async function testJunieConnection(connection, effectiveProxy = null, options = {}) {
+  if (!connection.accessToken && !connection.refreshToken) {
+    return { valid: false, error: "No access token", refreshed: false };
+  }
+
+  let accessToken = connection.accessToken;
+  let refreshed = false;
+  let newTokens = null;
+
+  const tryRefresh = async () => {
+    if (!connection.refreshToken) return false;
+    const merged = await refreshProviderCredentials("junie", connection, console);
+    if (!merged?.accessToken) return false;
+    accessToken = merged.accessToken;
+    refreshed = true;
+    newTokens = {
+      accessToken: merged.accessToken,
+      ...(merged.idToken ? { idToken: merged.idToken } : {}),
+      ...(merged.refreshToken ? { refreshToken: merged.refreshToken } : {}),
+      ...(merged.expiresIn ? { expiresIn: merged.expiresIn } : {}),
+    };
+    return true;
+  };
+
+  if (isTokenExpired(connection) && connection.refreshToken) {
+    const ok = await tryRefresh();
+    if (!ok) return { valid: false, error: "Token expired and refresh failed", refreshed: false };
+  }
+
+  const probe = async (token) =>
+    fetchWithConnectionProxy(
+      JUNIE_CHAT_URL,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...JUNIE_FREE_HEADERS,
+        },
+        body: JSON.stringify({
+          model: JUNIE_UPSTREAM_MODEL,
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: 1,
+          stream: false,
+        }),
+      },
+      effectiveProxy,
+    );
+
+  try {
+    let res = await probe(accessToken);
+    if ((res.status === 401 || res.status === 403) && !refreshed && connection.refreshToken) {
+      const ok = await tryRefresh();
+      if (!ok) return { valid: false, error: "Token invalid or expired", refreshed: false };
+      res = await probe(accessToken);
+    }
+    if (!res.ok) {
+      const revoked = res.status === 401 || res.status === 403;
+      return {
+        valid: false,
+        error: revoked ? "Token invalid or expired" : `Junie lane error (${res.status})`,
+        refreshed,
+        ...(newTokens ? { newTokens } : {}),
+      };
+    }
+    return { valid: true, error: null, refreshed, ...(newTokens ? { newTokens } : {}) };
+  } catch (err) {
+    return { valid: false, error: `Junie test failed: ${err.message}`, refreshed, ...(newTokens ? { newTokens } : {}) };
+  }
+}
+
+// AutoClaw（智谱澳龙，intl + CN）: no model-free chat probe exists and every
+// chat turn spends credits, so the truthful cheap check is the account
+// plane's signed user-profile read on the token's own region (JWT
+// source_id). Envelope code 0 = valid; 401/403 or a dead-login code → one
+// refresh through the rotating refresh token, and the new pair rides back
+// via newTokens so the caller persists it.
+async function testAutoclawConnection(connection, effectiveProxy = null) {
+  if (!connection.accessToken && !connection.refreshToken) {
+    return { valid: false, error: "No access token", refreshed: false };
+  }
+  let accessToken = connection.accessToken;
+  let refreshed = false;
+  let newTokens = null;
+
+  const tryRefresh = async () => {
+    if (!connection.refreshToken) return false;
+    const merged = await refreshProviderCredentials(connection.provider, connection, console);
+    if (!merged?.accessToken) return false;
+    accessToken = merged.accessToken;
+    refreshed = true;
+    newTokens = {
+      accessToken: merged.accessToken,
+      ...(merged.refreshToken ? { refreshToken: merged.refreshToken } : {}),
+      ...(merged.expiresIn ? { expiresIn: merged.expiresIn } : {}),
+    };
+    return true;
+  };
+
+  if (isTokenExpired(connection) && connection.refreshToken) {
+    const ok = await tryRefresh();
+    if (!ok) return { valid: false, error: "Token expired and refresh failed", refreshed: false };
+  }
+
+  const region = autoclawRegionFor(connection.provider, connection);
+  const probe = (token) => autoclawPost(
+    autoclawRegionConfig(region).accountHost,
+    AUTOCLAW_PATHS.userProfile,
+    {},
+    {
+      region,
+      accessToken: token,
+      deviceId: connection.providerSpecificData?.deviceId || null,
+      fetchImpl: (url, init) => fetchWithConnectionProxy(url, init, effectiveProxy),
+    },
+  );
+  const isAuthFailure = isAutoclawDeadLogin;
+
+  try {
+    try {
+      await probe(accessToken);
+    } catch (e) {
+      if (!isAuthFailure(e) || refreshed || !connection.refreshToken) throw e;
+      const ok = await tryRefresh();
+      if (!ok) return { valid: false, error: "Token invalid or expired", refreshed: false };
+      await probe(accessToken);
+    }
+    return { valid: true, error: null, refreshed, ...(newTokens ? { newTokens } : {}) };
+  } catch (err) {
+    return {
+      valid: false,
+      error: isAuthFailure(err) ? "Token invalid or expired" : `AutoClaw test failed: ${err.message}`,
+      refreshed,
+      ...(newTokens ? { newTokens } : {}),
+    };
+  }
+}
+
 async function testOAuthConnection(connection, effectiveProxy = null, options = {}) {
   // Qoder's test is model-aware and needs the live catalog — handled here, not
   // via OAUTH_TEST_CONFIG (which qoder-cn was never in, so it answered "Provider
@@ -803,6 +956,15 @@ async function testOAuthConnection(connection, effectiveProxy = null, options = 
   // QwenWork: same catalog-based test (see testQwenWorkConnection).
   if (connection.provider === "qwenwork" || connection.provider === "qwenwork-cn") {
     return testQwenWorkConnection(connection, effectiveProxy, options);
+  }
+  // Junie: the free lane has no token-validation endpoint — the probe is
+  // one minimal chat completion (see testJunieConnection).
+  if (connection.provider === "junie") {
+    return testJunieConnection(connection, effectiveProxy, options);
+  }
+  // AutoClaw: signed account-plane profile read (no credit-spending chat probe).
+  if (connection.provider === "autoclaw" || connection.provider === "autoclaw-cn") {
+    return testAutoclawConnection(connection, effectiveProxy);
   }
   const config = OAUTH_TEST_CONFIG[connection.provider];
   if (!config) return { valid: false, error: "Provider test not supported", refreshed: false };

@@ -60,6 +60,7 @@ import {
   ACCOUNT_PAGE_SIZE_MAX,
   ACCOUNT_FILTER_OPTIONS,
   QUOTA_SORT_OPTIONS,
+  sortRequestFromExpiringFirst,
 } from "./utils";
 import Card from "@/shared/components/Card";
 import { translate } from "@/i18n/runtime";
@@ -200,6 +201,9 @@ const KNOWN_PROVIDER_NAMES = {
   "lingxi": "Lingxi",
   "qwenwork": "QwenWork",
   "qwenwork-cn": "QwenWork CN",
+  "crowllm": "CrowLLM",
+  "autoclaw": "AutoClaw",
+  "autoclaw-cn": "AutoClaw CN",
 };
 
 export default function ProviderLimits() {
@@ -335,7 +339,11 @@ export default function ProviderLimits() {
           page: String(targetPage),
           pageSize: String(pageSize),
           accountStatus: accountFilter,
-          sort: "priority",
+          // "Resets first" is a server-side sort (earliestPackageExpiry across
+          // pages); the client-side sortVisibleConnections pass below only
+          // re-ranks the current page for cards whose per-pack resetAt has
+          // landed.
+          sort: sortRequestFromExpiringFirst(expiringFirst),
         });
 
         if (providerFilter !== "all") {
@@ -373,7 +381,7 @@ export default function ProviderLimits() {
           for (const c of externalSeeds) writeQuotaEntry(c.id, c.quota);
         }
         writeConnectionsCache(
-          connectionsCacheKey({ page: targetPage, pageSize, accountFilter, providerFilter }),
+          connectionsCacheKey({ page: targetPage, pageSize, accountFilter, providerFilter, expiringFirst }),
           {
             connections: connectionList,
             pagination: nextPagination,
@@ -839,7 +847,7 @@ export default function ProviderLimits() {
     // 1) Paint the last-known page + quotas from the browser cache at once.
     //    (Read in an effect, not a state initializer, so SSR markup matches.)
     const cached = readConnectionsCache(
-      connectionsCacheKey({ page, pageSize, accountFilter, providerFilter }),
+      connectionsCacheKey({ page, pageSize, accountFilter, providerFilter, expiringFirst }),
     );
     if (cached) {
       setConnections(cached.connections);
@@ -877,7 +885,9 @@ export default function ProviderLimits() {
     return () => {
       cancelled = true;
     };
-  }, [fetchConnections, scheduleQuotaFetches, page, pageSize, accountFilter, providerFilter]);
+    // expiringFirst 在 fetchConnections 的依赖里（sort 参数随它变），这里补上
+    // 是为了切换沙漏开关时按新排序重新拉页，而不是沿用旧序的缓存页。
+  }, [fetchConnections, scheduleQuotaFetches, page, pageSize, accountFilter, providerFilter, expiringFirst]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
