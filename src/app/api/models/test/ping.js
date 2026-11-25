@@ -190,6 +190,23 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
   try { parsed = rawText ? JSON.parse(rawText) : null; } catch {}
 
   if (!res.ok) {
+    if (rawText.includes("Streaming is required") || rawText.includes("stream: true") || rawText.includes("Streaming required")) {
+      const streamRes = await fetch(`${baseUrl}/api/v1/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model,
+          max_tokens: 32,
+          stream: true,
+          messages: [{ role: "user", content: "Reply with OK." }],
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+      const streamText = await streamRes.text().catch(() => "");
+      if (streamRes.ok && (streamText.includes("data:") || streamText.includes("[DONE]"))) {
+        return { ok: true, latencyMs: Date.now() - start, error: null, status: 200 };
+      }
+    }
     const detail = parsed?.error?.message || parsed?.msg || parsed?.message || parsed?.error || rawText;
     return { ok: false, latencyMs, error: `HTTP ${res.status}${detail ? `: ${String(detail).slice(0, 240)}` : ""}`, status: res.status };
   }
