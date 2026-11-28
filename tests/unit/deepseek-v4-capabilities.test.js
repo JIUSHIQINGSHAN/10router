@@ -13,9 +13,15 @@ const OFFERED = REGISTRY.flatMap((entry) =>
 
 const VISION_EXP = OFFERED.filter((m) => /vision/i.test(m.id));
 // V4.1-Flash (and its thinker variants) is multimodal per its model card and
-// models.dev; everything else in the family is text→text.
-const MULTIMODAL = OFFERED.filter((m) => /v4\.1-flash/i.test(m.id));
-const TEXT_ONLY = OFFERED.filter((m) => !/vision|v4\.1-flash/i.test(m.id));
+// models.dev; everything else in the family is text→text. loomy's
+// `deepseek-v4-flash-1017` is the same V4.1-Flash 1017 snapshot under a
+// flattened id (live /models reports text+image, 1M/384K) — but loomy's public
+// Bearer transport is text-only in practice (#179: image_url → 400, or 200 with
+// the model reading raw base64 as text). The model is multimodal; that channel
+// is not. Keep the real vision channels asserted here and exclude loomy
+// explicitly — its own vision:false rows are pinned in loomy-vision-text-channel.test.js.
+const MULTIMODAL = OFFERED.filter((m) => m.provider !== "loomy" && /v4\.1-flash|v4-flash-1017/i.test(m.id));
+const TEXT_ONLY = OFFERED.filter((m) => m.provider !== "loomy" && !/vision|v4\.1-flash|v4-flash-1017/i.test(m.id));
 
 describe("DeepSeek V4 capability resolution", () => {
   it("offers both a vision and a text variant (sanity check on the fixture)", () => {
@@ -71,7 +77,8 @@ describe("DeepSeek V4 capability resolution", () => {
 // V4.1-Flash ("Change the model name to deepseek-flash to call the latest V4.1
 // Flash model"), and opencode-go exposes the same bare id. QwenWork （千问办公）
 // resells it under the same bare key in its qwork catalog (added 2026-11-21) —
-// it joins the offerer set below, and the canonical-row assertions in this
+// it joins the offerer set below (as does QuWork, whose llm.quwork.cn catalog
+// lists the same bare id), and the canonical-row assertions in this
 // block are exactly what keep its profile honest there too. Without a canonical row
 // the id falls through to the `*deepseek*` pattern — the V3.2 profile of 128K
 // context / 64000 output / no vision — so images are stripped and max_tokens is
@@ -86,7 +93,7 @@ const OFFICIAL_ID = REGISTRY.flatMap((entry) =>
 describe("DeepSeek V4.1-Flash official id (deepseek-flash)", () => {
   it("is offered by the first-party provider and by opencode-go", () => {
     const providers = OFFICIAL_ID.map((m) => m.provider).sort();
-    expect(providers).toEqual(["deepseek", "opencode-go", "qwenwork", "qwenwork-cn"]);
+    expect(providers).toEqual(["deepseek", "opencode-go", "quwork", "qwenwork", "qwenwork-cn"]);
   });
 
   it("resolves from the canonical row, not the V3 *deepseek* wildcard", () => {
@@ -130,14 +137,15 @@ const DOTTED_ID = REGISTRY.flatMap((entry) =>
 
 describe("DeepSeek V4.1-Flash id with dots (deepseek-v4.1-flash)", () => {
   // 2026-11-10: trae intl 目录对齐官方客户端清单后也带此 id（paidTier 行）。
-  // 2026-11-13: experiential（Experiential Labs）接入后同样带此 id。
   // 2026-11-15: lingxi（WPS 灵犀）plans 目录同样带此 id（web 会话线）。
   // 2026-11-16: deepai（DeepAI Code）实时目录的免费档同样开出此 id
   // ——它走自己的 provider 行（deepai 段），不吃 canonical 的 deepseek
   // 思维形态，vision/reasoning 与本表一致。用例名保持原样：基线按
   // `file :: fullName` 记账，改名会被回归门当成 MISSING。
+  // 2026-11-25: clixad / freepi（#172）目录同样带此 id，两者走 canonical
+  // deepseek 形态（vision/1M/384K，thinkingFormat: deepseek）——断言清单补入。
   it("is offered by apinex, opencode-go, opencode-zen, both CodeBuddy gateways, trae-cn, trae intl and lingxi", () => {
-    expect(DOTTED_ID.map((m) => m.provider).sort()).toEqual(["apinex", "codebuddy-cn", "codebuddy-intl", "deepai", "deepseek", "experiential", "lingxi", "opencode-go", "opencode-zen", "trae", "trae-cn", "trae-free"]);
+    expect(DOTTED_ID.map((m) => m.provider).sort()).toEqual(["apinex", "clixad", "codebuddy-cn", "codebuddy-intl", "deepai", "deepseek", "freepi", "lingxi", "opencode-go", "opencode-zen", "trae", "trae-cn", "trae-free"]);
   });
 
   it("resolves from the canonical row where the provider has no override", () => {

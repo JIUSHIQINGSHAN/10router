@@ -1,5 +1,7 @@
 import { PROVIDERS } from "../config/providers.js";
 import { mintCapySessionJwt } from "../shared/capy/client.js";
+import { refreshOrcaTermToken } from "../shared/orcaterm/auth.js";
+import { refreshAtomCodeToken } from "../shared/atomcode/auth.js";
 import { OAUTH_ENDPOINTS, REFRESH_LEAD_MS } from "../config/appConstants.js";
 import {
   refreshXaiToken,
@@ -24,6 +26,7 @@ import {
   refreshZedToken,
   refreshWindsurfToken,
   refreshMinimaxCodeToken,
+  refreshQuworkToken,
   classifyOAuthRefreshError,
 } from "./tokenRefresh/providers.js";
 
@@ -50,6 +53,7 @@ export {
   refreshZedToken,
   refreshWindsurfToken,
   refreshMinimaxCodeToken,
+  refreshQuworkToken,
   classifyOAuthRefreshError,
 };
 
@@ -207,6 +211,8 @@ const REFRESH_HANDLERS = {
   nous: (c, log) => refreshNousToken(c.refreshToken, log),
   // Junie: form refresh; the returned id_token is the credential (see providers.js).
   junie: (c, log) => refreshJunieToken(c.refreshToken, log),
+  orcaterm: (c, log) => refreshOrcaTermToken(c.refreshToken || c.accessToken, log),
+  atomcode: (c, log) => refreshAtomCodeToken(c.refreshToken, log),
   // QwenWork: device-token refresh, single-use rotation (see providers.js).
   qwenwork: (c, log) => refreshQwenWorkToken(c.refreshToken, "qwenwork", log),
   "qwenwork-cn": (c, log) => refreshQwenWorkToken(c.refreshToken, "qwenwork-cn", log),
@@ -230,7 +236,9 @@ const REFRESH_HANDLERS = {
   "minimax-code-global": (c, log) => refreshMinimaxCodeToken("minimax-code-global", c.refreshToken, log),
   vertex: vertexRefreshHandler,
   "vertex-partner": vertexRefreshHandler,
-  capy: capyRefreshHandler
+  capy: capyRefreshHandler,
+  // QuWork: account token renewal; llm_token (apiKey) is not rotated.
+  quwork: (c, log) => refreshQuworkToken(c.refreshToken, log),
 };
 
 export async function getAccessToken(provider, credentials, log) {

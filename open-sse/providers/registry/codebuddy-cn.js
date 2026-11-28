@@ -38,18 +38,18 @@ export default {
       sanitizeToolSchema: true,
     },
     headers: {
-      // 2026-11-18 对齐官方 CLI 2.185.0（npm @tencent-ai/codebuddy-code，解包
-      // 分析其请求头构造）：新版不再发 "CLI/x.y.z CodeBuddy/x.y.z" 形态的 UA，
-      // 版本信息改走 X-IDE-Version / X-Client-Version / X-Product-Version 独立头。
-      // 过渡期双发：旧 UA 保留（现网实测仍 200，WAF 尚未拒），新头补齐 ——
-      // 上游不认识的头会忽略，认识的规则得到满足。旧 UA 被拒时删掉那行即可。
-      "User-Agent": "CLI/2.185.0 CodeBuddy/2.185.0",
+      // 2026-11-25 对齐官方 CLI 2.186.0（npm @tencent-ai/codebuddy-code 2.186.0
+      // 解包）：UA 模板未变——buildUserAgent 仍是 `${platform}/${platformVersion}`
+      // + `${productName}/${productVersion}`，platform=CLI、productName=CodeBuddy、
+      // 版本全部回退到包版本 2.186.0；X-IDE/X-Client/X-Product-Version 三头
+      // 继续发且默认值仍回退链 ideVersion→platformVersion→包版本。纯版本平移。
+      "User-Agent": "CLI/2.186.0 CodeBuddy/2.186.0",
       "X-Product": "SaaS",
       "X-IDE-Type": "CLI",
       "X-IDE-Name": "CLI",
-      "X-IDE-Version": "2.185.0",
-      "X-Client-Version": "2.185.0",
-      "X-Product-Version": "2.185.0",
+      "X-IDE-Version": "2.186.0",
+      "X-Client-Version": "2.186.0",
+      "X-Product-Version": "2.186.0",
       "x-requested-with": "XMLHttpRequest",
       "x-codebuddy-request": "1",
     },
@@ -120,6 +120,12 @@ export default {
     { id: "glm-5.3", name: "GLM-5.3", rateMultiplier: 0.69, subPriority: true },
     { id: "glm-5.3-flash", name: "GLM-5.3-Flash", rateMultiplier: 0.08, subPriority: true },
     { id: "glm-5.2", name: "GLM-5.2", rateMultiplier: 0.79, discountNote: "每晚 23:00—次日 8:00 积分限时立减，非高峰错峰更省" },
+    // GLM-5.4（客户端 2026-11-25 第五版清单新上）：0.69x、无徽章。与 glm-5.3
+    // 同价但**不带**「订阅优先」标签（截图卡面只有倍率）。能力走 canonical
+    // glm-5.4 行（1M/131072、全模态，zai 形状——provider 未声明 thinkingFormat
+    // 覆盖时由 capability 行给出 zai；本 provider 的 transport 写死 openai，
+    // resolveFormat 让 transport 覆盖 capability，与 CN 网关 openai 形状一致）。
+    { id: "glm-5.4", name: "GLM-5.4", rateMultiplier: 0.69 },
     { id: "minimax-m3.1-flash", name: "MiniMax-M3.1-Flash", rateMultiplier: 0.08 },
     // 2026-10-08 现网探测：hy5-preview / glm-5.4 / kimi-k2.7-code / muse-spark-1.3
     // 回 11102。minimax-m2.7 当日曾按「返回 200 且回显自身 id」短窗收录，
@@ -166,8 +172,8 @@ export default {
     stateUrl: "https://copilot.tencent.com/v2/plugin/auth/state",
     tokenUrl: "https://copilot.tencent.com/v2/plugin/auth/token",
     refreshUrl: "https://copilot.tencent.com/v2/plugin/auth/token/refresh",
-    // OAuth 轮询的 UA 与 transport 同步升到 2.185.0。
-    userAgent: "CLI/2.185.0 CodeBuddy/2.185.0",
+    // OAuth 轮询的 UA 与 transport 同步升到 2.186.0。
+    userAgent: "CLI/2.186.0 CodeBuddy/2.186.0",
     platform: "CLI",
     pollInterval: 5000,
   },

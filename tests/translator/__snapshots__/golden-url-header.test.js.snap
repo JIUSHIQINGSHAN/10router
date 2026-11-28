@@ -278,6 +278,28 @@ exports[`GOLDEN buildHeaders (default executor providers) > atlascloud → heade
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > atomcode → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "atomcode/5.2.8",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "atomcode/5.2.8",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "atomcode/5.2.8",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > atria → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -640,6 +662,28 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > clixad → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "X-Clixad-Client": "cli/0.0.1-beta.54",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "X-Clixad-Client": "cli/0.0.1-beta.54",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "X-Clixad-Client": "cli/0.0.1-beta.54",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > cloudflare-ai → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -665,26 +709,26 @@ exports[`GOLDEN buildHeaders (default executor providers) > codebuddy-cn → hea
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "CLI/2.185.0 CodeBuddy/2.185.0",
-    "X-Client-Version": "2.185.0",
+    "User-Agent": "CLI/2.186.0 CodeBuddy/2.186.0",
+    "X-Client-Version": "2.186.0",
     "X-IDE-Name": "CLI",
     "X-IDE-Type": "CLI",
-    "X-IDE-Version": "2.185.0",
+    "X-IDE-Version": "2.186.0",
     "X-Product": "SaaS",
-    "X-Product-Version": "2.185.0",
+    "X-Product-Version": "2.186.0",
     "x-codebuddy-request": "1",
     "x-requested-with": "XMLHttpRequest",
   },
   "nonStream": {
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "CLI/2.185.0 CodeBuddy/2.185.0",
-    "X-Client-Version": "2.185.0",
+    "User-Agent": "CLI/2.186.0 CodeBuddy/2.186.0",
+    "X-Client-Version": "2.186.0",
     "X-IDE-Name": "CLI",
     "X-IDE-Type": "CLI",
-    "X-IDE-Version": "2.185.0",
+    "X-IDE-Version": "2.186.0",
     "X-Product": "SaaS",
-    "X-Product-Version": "2.185.0",
+    "X-Product-Version": "2.186.0",
     "x-codebuddy-request": "1",
     "x-requested-with": "XMLHttpRequest",
   },
@@ -692,13 +736,13 @@ exports[`GOLDEN buildHeaders (default executor providers) > codebuddy-cn → hea
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "CLI/2.185.0 CodeBuddy/2.185.0",
-    "X-Client-Version": "2.185.0",
+    "User-Agent": "CLI/2.186.0 CodeBuddy/2.186.0",
+    "X-Client-Version": "2.186.0",
     "X-IDE-Name": "CLI",
     "X-IDE-Type": "CLI",
-    "X-IDE-Version": "2.185.0",
+    "X-IDE-Version": "2.186.0",
     "X-Product": "SaaS",
-    "X-Product-Version": "2.185.0",
+    "X-Product-Version": "2.186.0",
     "x-codebuddy-request": "1",
     "x-requested-with": "XMLHttpRequest",
   },
@@ -711,26 +755,26 @@ exports[`GOLDEN buildHeaders (default executor providers) > codebuddy-intl → h
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "IDE/2.185.0 CodeBuddy/2.185.0",
-    "X-Client-Version": "2.185.0",
+    "User-Agent": "IDE/2.186.0 CodeBuddy/2.186.0",
+    "X-Client-Version": "2.186.0",
     "X-IDE-Name": "IDE",
     "X-IDE-Type": "IDE",
-    "X-IDE-Version": "2.185.0",
+    "X-IDE-Version": "2.186.0",
     "X-Product": "SaaS",
-    "X-Product-Version": "2.185.0",
+    "X-Product-Version": "2.186.0",
     "x-codebuddy-request": "1",
     "x-requested-with": "XMLHttpRequest",
   },
   "nonStream": {
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "IDE/2.185.0 CodeBuddy/2.185.0",
-    "X-Client-Version": "2.185.0",
+    "User-Agent": "IDE/2.186.0 CodeBuddy/2.186.0",
+    "X-Client-Version": "2.186.0",
     "X-IDE-Name": "IDE",
     "X-IDE-Type": "IDE",
-    "X-IDE-Version": "2.185.0",
+    "X-IDE-Version": "2.186.0",
     "X-Product": "SaaS",
-    "X-Product-Version": "2.185.0",
+    "X-Product-Version": "2.186.0",
     "x-codebuddy-request": "1",
     "x-requested-with": "XMLHttpRequest",
   },
@@ -738,13 +782,13 @@ exports[`GOLDEN buildHeaders (default executor providers) > codebuddy-intl → h
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "IDE/2.185.0 CodeBuddy/2.185.0",
-    "X-Client-Version": "2.185.0",
+    "User-Agent": "IDE/2.186.0 CodeBuddy/2.186.0",
+    "X-Client-Version": "2.186.0",
     "X-IDE-Name": "IDE",
     "X-IDE-Type": "IDE",
-    "X-IDE-Version": "2.185.0",
+    "X-IDE-Version": "2.186.0",
     "X-Product": "SaaS",
-    "X-Product-Version": "2.185.0",
+    "X-Product-Version": "2.186.0",
     "x-codebuddy-request": "1",
     "x-requested-with": "XMLHttpRequest",
   },
@@ -771,25 +815,6 @@ exports[`GOLDEN buildHeaders (default executor providers) > codiv → headers (a
 `;
 
 exports[`GOLDEN buildHeaders (default executor providers) > cohere → headers (apiKey / oauth) 1`] = `
-{
-  "apiKey": {
-    "Accept": "text/event-stream",
-    "Authorization": "Bearer <TOK>",
-    "Content-Type": "application/json",
-  },
-  "nonStream": {
-    "Authorization": "Bearer <TOK>",
-    "Content-Type": "application/json",
-  },
-  "oauth": {
-    "Accept": "text/event-stream",
-    "Authorization": "Bearer <TOK>",
-    "Content-Type": "application/json",
-  },
-}
-`;
-
-exports[`GOLDEN buildHeaders (default executor providers) > croli → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
     "Accept": "text/event-stream",
@@ -951,6 +976,25 @@ exports[`GOLDEN buildHeaders (default executor providers) > featherless → head
 `;
 
 exports[`GOLDEN buildHeaders (default executor providers) > fireworks → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > freepi → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
     "Accept": "text/event-stream",
@@ -1789,6 +1833,37 @@ exports[`GOLDEN buildHeaders (default executor providers) > openrouter → heade
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > orcaterm → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "Origin": "https://orcaterm.com",
+    "Referer": "https://orcaterm.com/terminal",
+    "X-Product": "orcaterm",
+    "X-Referer": "https://orcaterm.com/terminal",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "Origin": "https://orcaterm.com",
+    "Referer": "https://orcaterm.com/terminal",
+    "X-Product": "orcaterm",
+    "X-Referer": "https://orcaterm.com/terminal",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "Origin": "https://orcaterm.com",
+    "Referer": "https://orcaterm.com/terminal",
+    "X-Product": "orcaterm",
+    "X-Referer": "https://orcaterm.com/terminal",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > oxion → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -1861,6 +1936,31 @@ exports[`GOLDEN buildHeaders (default executor providers) > poolside → headers
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > quwork → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "X-QurWork-Env": "prod",
+    "X-QurWork-Version": "1.7.5",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "X-QurWork-Env": "prod",
+    "X-QurWork-Version": "1.7.5",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "X-QurWork-Env": "prod",
+    "X-QurWork-Version": "1.7.5",
   },
 }
 `;
@@ -2365,6 +2465,25 @@ exports[`GOLDEN buildHeaders (default executor providers) > xai → headers (api
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > xiaohuanxiong → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > xiaomi-mimo → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -2526,6 +2645,13 @@ exports[`GOLDEN buildUrl (default executor providers) > atlascloud → url (stre
 }
 `;
 
+exports[`GOLDEN buildUrl (default executor providers) > atomcode → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://llm-api.atomgit.com/v1/chat/completions",
+  "stream": "https://llm-api.atomgit.com/v1/chat/completions",
+}
+`;
+
 exports[`GOLDEN buildUrl (default executor providers) > atria → url (stream + non-stream) 1`] = `
 {
   "nonStream": "https://api.atria-asi.ai/v1/chat/completions",
@@ -2624,6 +2750,13 @@ exports[`GOLDEN buildUrl (default executor providers) > clinepass → url (strea
 }
 `;
 
+exports[`GOLDEN buildUrl (default executor providers) > clixad → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://clixad.onrender.com/v1/chat/completions",
+  "stream": "https://clixad.onrender.com/v1/chat/completions",
+}
+`;
+
 exports[`GOLDEN buildUrl (default executor providers) > cloudflare-ai → url (stream + non-stream) 1`] = `
 {
   "nonStream": "https://api.cloudflare.com/client/v4/accounts/ACC123/ai/v1/chat/completions",
@@ -2656,13 +2789,6 @@ exports[`GOLDEN buildUrl (default executor providers) > cohere → url (stream +
 {
   "nonStream": "https://api.cohere.ai/v1/chat/completions",
   "stream": "https://api.cohere.ai/v1/chat/completions",
-}
-`;
-
-exports[`GOLDEN buildUrl (default executor providers) > croli → url (stream + non-stream) 1`] = `
-{
-  "nonStream": "https://ds.croli.net/v1/chat/completions",
-  "stream": "https://ds.croli.net/v1/chat/completions",
 }
 `;
 
@@ -2719,6 +2845,13 @@ exports[`GOLDEN buildUrl (default executor providers) > fireworks → url (strea
 {
   "nonStream": "https://api.fireworks.ai/inference/v1/chat/completions",
   "stream": "https://api.fireworks.ai/inference/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > freepi → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://api.freepi.ai/v1/chat/completions",
+  "stream": "https://api.freepi.ai/v1/chat/completions",
 }
 `;
 
@@ -2995,6 +3128,13 @@ exports[`GOLDEN buildUrl (default executor providers) > openrouter → url (stre
 }
 `;
 
+exports[`GOLDEN buildUrl (default executor providers) > orcaterm → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://lightai.cloud.tencent.com/assistant/chat?name=orcaterm&mode=0&csrfCode=&sseresume=true",
+  "stream": "https://lightai.cloud.tencent.com/assistant/chat?name=orcaterm&mode=0&csrfCode=&sseresume=true",
+}
+`;
+
 exports[`GOLDEN buildUrl (default executor providers) > oxion → url (stream + non-stream) 1`] = `
 {
   "nonStream": "https://oxionai.com/v1/chat/completions",
@@ -3020,6 +3160,13 @@ exports[`GOLDEN buildUrl (default executor providers) > poolside → url (stream
 {
   "nonStream": "https://inference.poolside.ai/v1/chat/completions",
   "stream": "https://inference.poolside.ai/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > quwork → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://llm.quwork.cn/v1/chat/completions",
+  "stream": "https://llm.quwork.cn/v1/chat/completions",
 }
 `;
 
@@ -3195,6 +3342,13 @@ exports[`GOLDEN buildUrl (default executor providers) > xai → url (stream + no
 {
   "nonStream": "https://api.x.ai/v1/chat/completions",
   "stream": "https://api.x.ai/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > xiaohuanxiong → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://xiaohuanxiong.com/api/web/llm/v2/chat/completions",
+  "stream": "https://xiaohuanxiong.com/api/web/llm/v2/chat/completions",
 }
 `;
 

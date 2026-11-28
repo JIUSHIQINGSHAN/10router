@@ -146,7 +146,8 @@ export const ALLOWLIST = {
   "cline/kwaipilot/kat-coder-pro": "conflict", // v1 vs v2/v2.5, same split
 
   // Loomy (讯飞) 免费活动池：无公开 API 规格、无 models.dev 条目；spark-x2.6 为
-  // 讯飞自家模型（×0.0 免费倍率），规格只能以客户端实测为准，保留地板值。
+  // 讯飞自家模型（2026-11-25 限时免费结束，×2.5），规格只能以客户端实测为准，
+  // 保留地板值。
   "loomy/spark-x2.6": "no public spec",
 
   // DuMate (百度搭子) internal selectors: the platform routes "model-text" and
@@ -184,6 +185,19 @@ export const ALLOWLIST = {
   // 能力以私有 API 实测为准，保留地板值。其余 capy 模型（anthropic/* 等
   // vendor 前缀 id）走 canonical/CI 层正常解析。
   "capy/particle/particle-1": "no public spec",
+
+  // FreePi 自家模型（广告赞助的免费档，id 无任何 pattern 命中）：无公开规格、
+  // 无 models.dev 条目，保留地板值——与 capy/particle/particle-1 同口径。
+  "freepi/particle": "no public spec",
+
+  // 小浣熊（#169）自家 Raccoon 系列：内部版本号 id（raccoon-090dd3 等），官方无
+  // 公开规格，无 pattern 命中 → 保留地板值。sn-sensenova 两款 flash 带 sn- 前缀
+  // 剥不掉（canonical 只有带点 sensenova-6.8-flash-lite 键），同样落地板。
+  "xiaohuanxiong/raccoon-090dd3": "no public spec (internal id)",
+  "xiaohuanxiong/raccoon-19b265": "no public spec (internal id)",
+  "xiaohuanxiong/raccoon-405a1c": "no public spec (internal id)",
+  "xiaohuanxiong/sn-sensenova-6-8-flash": "no public spec (sn- prefixed)",
+  "xiaohuanxiong/sn-sensenova-6-8-flash-lite": "no public spec (sn- prefixed)",
 };
 
 // Media-kind models (kind: "image" | "video" | "tts" | …) are excluded from

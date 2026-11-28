@@ -14,6 +14,8 @@ import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { translate } from "@/i18n/runtime";
+import { RoutingStrategySelect } from "@/shared/components/RoutingStrategySelect";
+import { SESSION_ROUND_ROBIN } from "open-sse/config/routingStrategies.js";
 import { useNotificationStore } from "@/store/notificationStore";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
@@ -24,14 +26,15 @@ import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
 import ConnectionRow from "./ConnectionRow";
-import CroliCreditsPanel from "./CroliCreditsPanel";
 import DumateQrModal from "../components/DumateQrModal";
+import OrcaTermOAuthModal from "@/shared/components/OrcaTermOAuthModal";
 import LingxiCaptureModal from "../components/LingxiCaptureModal";
 import SessionPoolModal from "./SessionPoolModal";
 import AddApiKeyModal from "./AddApiKeyModal";
 import LoomySmsModal from "../components/LoomySmsModal";
 import CapyLoginModal from "../components/CapyLoginModal";
 import AutoclawSmsModal from "../components/AutoclawSmsModal";
+import QuworkLoginModal from "../components/QuworkLoginModal";
 import AutoclawOAuthModal from "../components/AutoclawOAuthModal";
 import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
@@ -102,6 +105,7 @@ export default function ProviderDetailPage() {
   const [showCapyLoginModal, setShowCapyLoginModal] = useState(false);
   const [showAutoclawSmsModal, setShowAutoclawSmsModal] = useState(false);
   const [showAutoclawOAuthModal, setShowAutoclawOAuthModal] = useState(false);
+  const [showQuworkLoginModal, setShowQuworkLoginModal] = useState(false);
   const [addConnectionError, setAddConnectionError] = useState("");
   const [showBulkImportCodex, setShowBulkImportCodex] = useState(false);
   const [showMeooImportApikey, setShowMeooImportApikey] = useState(false);
@@ -113,7 +117,6 @@ export default function ProviderDetailPage() {
   const [modelAliases, setModelAliases] = useState({});
   const [customModels, setCustomModels] = useState([]);
   const [oauthTransferEnabled, setOauthTransferEnabled] = useState(false); // per-provider toggle (falls back to legacy global)
-  const [croliAutoCheckin, setCroliAutoCheckin] = useState(false);
   const [codeBuddyCheckinEnabled, setCodeBuddyCheckinEnabled] = useState(false); // experimental auto daily check-in toggle
   const [codeBuddyCompensationEnabled, setCodeBuddyCompensationEnabled] = useState(false); // experimental auto compensation toggle
   // cbcn check-in manual trigger: running flag (per-account results go to the
@@ -220,6 +223,12 @@ export default function ProviderDetailPage() {
     // Aliyun slider captcha solved in the user's browser — dedicated modal.
     if (providerId === "autoclaw") {
       setShowAutoclawOAuthModal(true);
+      return;
+    }
+
+    // QuWork: phone + SMS (slider captcha popup) or pasted tokens — no browser-OAuth URL.
+    if (providerId === "quwork") {
+      setShowQuworkLoginModal(true);
       return;
     }
     if (isOAuth) {
@@ -522,7 +531,6 @@ export default function ProviderDetailPage() {
   // Must appear in every action row — single-auth providers (minimax-code is
   // OAuth-only) take the non-dual branch, which once lacked it.
   const hasClaimCheckin = ["qoder", "qoder-cn", "minimax-code", "minimax-code-global", "trae", "trae-cn"].includes(providerId);
-  const showCroliCredits = providerId === "croli";
   /**
    * The Export/Import button pair, hoisted out of the dual-auth-only branch.
    *
@@ -741,7 +749,6 @@ export default function ProviderDetailPage() {
       const nodesData = await nodesRes.json();
       const proxyPoolsData = await proxyPoolsRes.json();
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
-      if (providerId === "croli") setCroliAutoCheckin(settingsData.croliCheckin === true);
       if (connectionsRes.ok) {
         const filtered = (connectionsData.connections || []).filter(c => c.provider === providerId);
         setConnections(filtered);
@@ -863,17 +870,12 @@ export default function ProviderDetailPage() {
         delete override.dailyGrantFirst;
       }
 
-      const updated = { ...current };
-      if (Object.keys(override).length === 0) {
-        delete updated[providerId];
-      } else {
-        updated[providerId] = override;
-      }
-
+      // 单 provider 原子写入（服务端事务内合并）：整块 providerStrategies 回写
+      // 会用本标签页的快照覆盖别的 provider 的策略，见 api/settings 的注释。
       await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerStrategies: updated }),
+        body: JSON.stringify({ providerStrategyPatch: { [providerId]: override } }),
       });
     } catch (error) {
       console.log("Error saving provider strategy:", error);
@@ -886,7 +888,13 @@ export default function ProviderDetailPage() {
   };
 
   const handlePackOrSubStrategyChange = (value) => {
-    if (value === "round-robin") {
+    if (value === SESSION_ROUND_ROBIN) {
+      setEarliestExpiryFirst(false);
+      setDailyGrantFirst(false);
+      setProviderStrategy(value);
+      setBalanceStrategy("priority");
+      saveProviderStrategy(value, providerStickyLimit, false, "priority", false);
+    } else if (value === "round-robin") {
       setEarliestExpiryFirst(false);
       setProviderStrategy("round-robin");
       if (!providerStickyLimit) setProviderStickyLimit("1");
@@ -925,12 +933,12 @@ export default function ProviderDetailPage() {
       setDailyGrantFirst(true);
       setProviderStrategy(null);
       saveProviderStrategy(null, providerStickyLimit, false, "priority", true);
-    } else if (value === "round-robin") {
+    } else if (value === "round-robin" || value === SESSION_ROUND_ROBIN) {
       setEarliestExpiryFirst(false);
       setDailyGrantFirst(false);
-      setProviderStrategy("round-robin");
+      setProviderStrategy(value);
       if (!providerStickyLimit) setProviderStickyLimit("1");
-      saveProviderStrategy("round-robin", providerStickyLimit || "1", false, value, false);
+      saveProviderStrategy(value, providerStickyLimit || "1", false, value === SESSION_ROUND_ROBIN ? "priority" : value, false);
     } else {
       setEarliestExpiryFirst(false);
       setDailyGrantFirst(false);
@@ -1508,7 +1516,7 @@ export default function ProviderDetailPage() {
     setModelTestResults({});
     setOneByOneResults({});
     setOneByOneSummary(null);
-    fetchConnections();
+    refreshAfterConnectionChange();
     setShowOAuthModal(false);
   };
 
@@ -2431,19 +2439,21 @@ export default function ProviderDetailPage() {
                 if (quotaCat === PROVIDER_QUOTA_TYPES.PACK_ASSET) {
                   // 资源包供应商的 usage 不暴露 daily/permanent 配对，daily-grant 选项不提供
                   // （历史上误存过 qoder-cn 的 dailyGrantFirst，fetchData 已兜底忽略）。
-                  const currentValue = earliestExpiryFirst ? "earliest" : (providerStrategy === "round-robin" ? "round-robin" : "priority");
+                  const currentValue = earliestExpiryFirst ? "earliest" : (["round-robin", SESSION_ROUND_ROBIN].includes(providerStrategy) ? providerStrategy : "priority");
                   return (
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-text-muted font-medium">
                           {translate("Scheduling Preference")}
                         </span>
-                        <Select
+                        <RoutingStrategySelect
+                          layer="account"
+                          accessibleLabel="Scheduling Preference"
                           value={currentValue}
                           onChange={(e) => handlePackOrSubStrategyChange(e.target.value)}
                           options={[
                             { value: "earliest", label: translate("Earliest Pack Expiry") },
-                            { value: "round-robin", label: translate("Round Robin (Balanced)") },
+                            { value: "round-robin" },
                             { value: "priority", label: translate("Manual Priority (#1 → #2)") },
                           ]}
                           selectClassName="!py-1 !text-xs w-48"
@@ -2468,19 +2478,21 @@ export default function ProviderDetailPage() {
 
                 // 2. Rolling Subscription Providers (Antigravity, GitHub, Codex, GLM)
                 if (quotaCat === PROVIDER_QUOTA_TYPES.ROLLING_SUBSCRIPTION) {
-                  const currentValue = earliestExpiryFirst ? "earliest" : (dailyGrantFirst ? "daily-grant" : (providerStrategy === "round-robin" ? "round-robin" : "priority"));
+                  const currentValue = earliestExpiryFirst ? "earliest" : (dailyGrantFirst ? "daily-grant" : (["round-robin", SESSION_ROUND_ROBIN].includes(providerStrategy) ? providerStrategy : "priority"));
                   return (
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-text-muted font-medium">
                           {translate("Scheduling Preference")}
                         </span>
-                        <Select
+                        <RoutingStrategySelect
+                          layer="account"
+                          accessibleLabel="Scheduling Preference"
                           value={currentValue}
                           onChange={(e) => handlePackOrSubStrategyChange(e.target.value)}
                           options={[
                             { value: "earliest", label: translate("Subscription Relay") },
-                            { value: "round-robin", label: translate("Round Robin (Balanced)") },
+                            { value: "round-robin" },
                             { value: "priority", label: translate("Manual Priority (#1 → #2)") },
                           ]}
                           selectClassName="!py-1 !text-xs w-48"
@@ -2512,14 +2524,18 @@ export default function ProviderDetailPage() {
                   // (保存时 balanceStrategy 归 priority,不写 override)。
                   const currentValue = earliestExpiryFirst
                     ? "earliest-expiry"
-                    : (dailyGrantAllowed ? balanceStrategy : (balanceStrategy === "daily-grant" ? "priority" : balanceStrategy));
+                    : providerStrategy === SESSION_ROUND_ROBIN && !dailyGrantFirst && !["lowest-first", "highest-first"].includes(balanceStrategy)
+                      ? SESSION_ROUND_ROBIN
+                      : (dailyGrantAllowed ? balanceStrategy : (balanceStrategy === "daily-grant" ? "priority" : balanceStrategy));
                   return (
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-text-muted font-medium">
                           {translate("Scheduling Preference")}
                         </span>
-                        <Select
+                        <RoutingStrategySelect
+                          layer="account"
+                          accessibleLabel="Scheduling Preference"
                           value={currentValue}
                           onChange={(e) => handleBalanceStrategyChange(e.target.value)}
                           options={[
@@ -2527,13 +2543,13 @@ export default function ProviderDetailPage() {
                             { value: "earliest-expiry", label: translate("Earliest Expiry First") },
                             { value: "lowest-first", label: translate("Lowest Balance First") },
                             { value: "highest-first", label: translate("Highest Balance First") },
-                            { value: "round-robin", label: translate("Round Robin (Balanced)") },
+                            { value: "round-robin" },
                             ...(dailyGrantAllowed ? [{ value: "daily-grant", label: translate("Daily Grant First") }] : []),
                           ]}
                           selectClassName="!py-1 !text-xs w-48"
                         />
                       </div>
-                      {balanceStrategy === "round-robin" && (
+                      {currentValue === "round-robin" && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-text-muted">{translate("Sticky:")}</span>
                           <input
@@ -2560,19 +2576,21 @@ export default function ProviderDetailPage() {
                 }
 
                 // 5. GENERIC Fallback (Safe default for third-party / unknown / custom providers)
-                const fallbackCurrentValue = earliestExpiryFirst ? "earliest" : (providerStrategy === "round-robin" ? "round-robin" : "priority");
+                const fallbackCurrentValue = earliestExpiryFirst ? "earliest" : (["round-robin", SESSION_ROUND_ROBIN].includes(providerStrategy) ? providerStrategy : "priority");
                 return (
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-muted font-medium">
                         {translate("Scheduling Preference")}
                       </span>
-                      <Select
+                      <RoutingStrategySelect
+                          layer="account"
+                          accessibleLabel="Scheduling Preference"
                         value={fallbackCurrentValue}
                         onChange={(e) => handlePackOrSubStrategyChange(e.target.value)}
                         options={[
                           { value: "earliest", label: translate("Earliest Expiry First") },
-                          { value: "round-robin", label: translate("Round Robin (Balanced)") },
+                          { value: "round-robin" },
                           { value: "priority", label: translate("Manual Priority (#1 → #2)") },
                         ]}
                         selectClassName="!py-1 !text-xs w-48"
@@ -2822,7 +2840,6 @@ export default function ProviderDetailPage() {
                       {renderOAuthTransferButtons("w-full sm:w-auto")}
                       {codeBuddyCheckinOn && renderCbCheckinBlock()}
                       {hasClaimCheckin && renderQoderCheckinBlock()}
-                      {showCroliCredits && <CroliCreditsPanel connections={connections} initialAutoCheckin={croliAutoCheckin} />}
                     </>
                   ) : (
                     <>
@@ -2841,7 +2858,6 @@ export default function ProviderDetailPage() {
                       )}
                       {renderOAuthTransferButtons("w-full sm:w-auto")}
                       {hasClaimCheckin && renderQoderCheckinBlock()}
-                      {showCroliCredits && <CroliCreditsPanel connections={connections} initialAutoCheckin={croliAutoCheckin} />}
                     </>
                   )}
                 </div>
@@ -2971,6 +2987,14 @@ export default function ProviderDetailPage() {
           onSuccess={handleOAuthSuccess}
           onClose={() => setShowOAuthModal(false)}
         />
+      ) : providerId === "orcaterm" ? (
+        showOAuthModal && (
+          <OrcaTermOAuthModal
+            isOpen
+            onSuccess={handleOAuthSuccess}
+            onClose={() => setShowOAuthModal(false)}
+          />
+        )
       ) : providerId === "gitlab" ? (
         <GitLabAuthModal
           isOpen={showOAuthModal}
@@ -3073,6 +3097,13 @@ export default function ProviderDetailPage() {
         <AutoclawSmsModal
           isOpen
           onClose={() => setShowAutoclawSmsModal(false)}
+          onAdded={refreshAfterConnectionChange}
+        />
+      )}
+      {providerId === "quwork" && showQuworkLoginModal && (
+        <QuworkLoginModal
+          isOpen
+          onClose={() => setShowQuworkLoginModal(false)}
           onAdded={refreshAfterConnectionChange}
         />
       )}

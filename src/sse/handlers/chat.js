@@ -19,7 +19,7 @@ import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
+import { errorResponse, unavailableResponse, markTransportFault } from "open-sse/utils/error.js";
 import { upstreamResponseHeaders } from "open-sse/utils/upstreamHeaders.js";
 import { handleComboChat, handleFusionChat, detectRequiredCapabilities } from "open-sse/services/combo.js";
 import { runRouterDecision } from "./comboRouter.js";
@@ -33,13 +33,20 @@ import { updateProviderCredentials, checkAndRefreshToken, persistRefreshedCreden
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { INTERNAL_COMPACTION_HEADER } from "@/sse/services/autoCompact.js";
+import { getClientIp } from "@/lib/auth/loginLimiter.js";
+import { createRoutingIdentity, routingCaller } from "open-sse/services/sessionAffinity.js";
+import { onSessionResponse, observeSessionResponse } from "open-sse/services/sessionResponse.js";
+
+export async function handleChat(request, clientRawRequest = null) {
+  return observeSessionResponse(await handleChatRequest(request, clientRawRequest));
+}
 
 /**
  * Handle chat completion request
  * Supports: OpenAI, Claude, Gemini, OpenAI Responses API formats
  * Format detection and translation handled by translator
  */
-export async function handleChat(request, clientRawRequest = null) {
+async function handleChatRequest(request, clientRawRequest = null) {
   let body;
   try {
     body = await request.json();
@@ -106,6 +113,10 @@ export async function handleChat(request, clientRawRequest = null) {
   const bypassResponse = handleBypassRequest(body, modelStr, userAgent, !!settings.ccFilterNaming);
   if (bypassResponse) return bypassResponse.response || bypassResponse;
 
+  const routingIdentity = request.headers.get(INTERNAL_COMPACTION_HEADER) !== "1"
+    ? createRoutingIdentity(body, request.headers, routingCaller(apiKey, apiKey ? null : getClientIp(request)))
+    : null;
+
   // ── Auto-compaction for oversized contexts. Runs before combo/adapter
   // dispatch so every downstream path (single model, combo, fusion, capacity
   // adapter) sees ONE summarized body instead of individually hitting
@@ -147,7 +158,7 @@ export async function handleChat(request, clientRawRequest = null) {
             const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
             cleanRawReq = { ...clientRawRequest, body: cleanBody };
           }
-          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, { routingIdentity: isPanel ? null : routingIdentity });
         },
         log,
         comboName: modelStr,
@@ -186,7 +197,7 @@ export async function handleChat(request, clientRawRequest = null) {
           body,
           models: ordered,
           handleSingleModel: withCapacityAdapterStripping(
-            (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+            (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, { comboSeat: true, routingIdentity }),
             adapterAdded
           ),
           log,
@@ -194,6 +205,7 @@ export async function handleChat(request, clientRawRequest = null) {
           // Rotation is meaningless for a decision-pinned pick; the fallback
           // loop + auto-switch stay active below it.
           comboStrategy: "fallback",
+          routingIdentity,
           comboStickyLimit,
           comboStickyWindowMinutes,
           retryOnEmpty,
@@ -209,12 +221,13 @@ export async function handleChat(request, clientRawRequest = null) {
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, { comboSeat: true, routingIdentity }),
         adapterAdded
       ),
       log,
       comboName: modelStr,
       comboStrategy,
+      routingIdentity,
       comboStickyLimit,
       comboStickyWindowMinutes,
       retryOnEmpty,
@@ -232,7 +245,7 @@ export async function handleChat(request, clientRawRequest = null) {
       body,
       models: soloAugmented,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, { comboSeat: true, routingIdentity }),
         adapterAdded
       ),
       log,
@@ -243,6 +256,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
   return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, {
     inferFallback: false,
+    routingIdentity,
     requestedModel: contextMarker ? `${modelStr.slice(modelStr.indexOf("/") + 1)}[${contextMarker}]` : null,
   });
 }
@@ -259,7 +273,7 @@ export async function handleChat(request, clientRawRequest = null) {
  * `requestedModel` 是客户端要求的原始模型 id（可能带 [1m] 标记），与解析后的
  * 基础 id 分开传递：账号 enabledModels 勾选过滤按它判断（codex [1m]）。
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, { inferFallback = true, requestedModel = null } = {}) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, { inferFallback = true, requestedModel = null, comboSeat = false, routingIdentity = null } = {}) {
   const modelInfo = await getModelInfo(modelStr, { inferFallback });
 
   // If provider is null, this might be a combo name - check and handle
@@ -286,7 +300,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
               const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
               cleanRawReq = { ...clientRawRequest, body: cleanBody };
             }
-            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, { routingIdentity: isPanel ? null : routingIdentity });
           },
           log,
           comboName: modelStr,
@@ -304,12 +318,13 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         body,
         models: augmentedModels,
         handleSingleModel: withCapacityAdapterStripping(
-          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, { comboSeat: true, routingIdentity }),
           adapterAdded
         ),
         log,
         comboName: modelStr,
         comboStrategy,
+        routingIdentity,
         comboStickyLimit,
         comboStickyWindowMinutes,
         retryOnEmpty,
@@ -335,6 +350,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastError = null;
   let lastStatus = null;
   let lastHeaders = null;
+  // #176: on a combo seat, remember WHICH KIND of failure every account gave.
+  // The member breaker counts only a seat where NO account produced any HTTP
+  // answer at all (pure transport death); one real 429/500/402 anywhere in the
+  // walk belongs to #91's account cooldown, not here.
+  let seatTransportFaultSeen = false;
+  let seatRealHttpSeen = false;
 
   // Pre-emptive protection for CodeBuddy CN — EXTREME-SIZE BACKSTOP ONLY.
   //
@@ -385,6 +406,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, {
       requestedModel: requestedModel || model,
       preferredConnectionId,
+      routingIdentity,
     });
 
     // All accounts unavailable
@@ -399,12 +421,18 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
             ? withInsufficientBalanceHint(baseMsg, provider)
             : withRateLimitHint(baseMsg, provider),
         );
-        return unavailableResponse(
-          status,
-          hintedMsg,
-          credentials.retryAfter,
-          credentials.retryAfterHuman,
-          lastHeaders,
+        return markTransportFault(
+          unavailableResponse(
+            status,
+            hintedMsg,
+            credentials.retryAfter,
+            credentials.retryAfterHuman,
+            lastHeaders,
+          ),
+          // #176: the walk ran dry mid-seat (the account just walked here died
+          // at the transport layer, the rest are #91-cooling). Only THIS walk's
+          // evidence counts — one real HTTP answer here vetoes the verdict.
+          comboSeat && seatTransportFaultSeen && !seatRealHttpSeen,
         );
       }
       if (excludeConnectionIds.size === 0) {
@@ -418,10 +446,16 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
           ? withInsufficientBalanceHint(baseLastError, provider)
           : withRateLimitHint(baseLastError, provider),
       );
-      return errorResponse(
-        lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
-        hintedLastError,
-        lastHeaders,
+      return markTransportFault(
+        errorResponse(
+          lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
+          hintedLastError,
+          lastHeaders,
+        ),
+        // #176: seat-level verdict, only when this member walked every account and
+        // NOTHING ever answered with an HTTP status. One real 429/500/402 anywhere
+        // in the walk belongs to #91's account cooldown, not the transport breaker.
+        comboSeat && seatTransportFaultSeen && !seatRealHttpSeen,
       );
     }
 
@@ -466,6 +500,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       pxpipeTransform: chatSettings.pxpipeEnabled ? await getPxpipeTransform() : null,
       onPxpipeEvent: appendPxpipeEvent,
       providerThinking,
+      // #176: this walk is one SEAT of a combo — probe on the short budget, skip
+      // the in-executor transport ladder, and let a no-answer failure be flagged.
+      comboProbe: comboSeat,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       // Shared with every other handler on purpose: the inlined copies used to
@@ -485,12 +522,6 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       onCredentialsRefreshFailed: async (err) => {
         await markConnectionNeedsReauth(credentials.connectionId, { provider, reason: err, log });
       },
-      onCompletedResponse: provider === "croli" && request?.headers?.get(INTERNAL_COMPACTION_HEADER) !== "1"
-        ? async () => {
-            const { reportCroliCompletedUserTurn } = await import("@/sse/services/croliCheckin.js");
-            await reportCroliCompletedUserTurn(credentials.connectionId, { log });
-          }
-        : undefined,
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
         // A success proves the channel is serving again — drop any block
@@ -505,7 +536,18 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
     });
 
-    if (result.success) return result.response;
+    if (result.success) {
+      if (credentials.commitSession) onSessionResponse(result.response, credentials.commitSession);
+      return result.response;
+    }
+
+    // #176: classify this account's failure for the seat-level verdict. A
+    // transport fault is "executor.execute threw, no bytes back"; anything else
+    // is a real HTTP answer (429/500/402/…), which belongs to #91's cooldown.
+    if (comboSeat) {
+      if (result.transport) seatTransportFaultSeen = true;
+      else seatRealHttpSeen = true;
+    }
 
     // Mark account unavailable (auto-calculates cooldown with exponential backoff, or precise resetsAtMs)
     const { shouldFallback, channelScope, unattributed429 } = await markAccountUnavailable(

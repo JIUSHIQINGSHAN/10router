@@ -4,7 +4,7 @@ import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLock
 import { MAX_RATE_LIMIT_COOLDOWN_MS, MAX_QUOTA_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getUsageForProvider } from "open-sse/services/usage.js";
-import { extractEarliestPackageExpiry } from "open-sse/services/usage/expiryExtractor.js";
+import { extractEarliestPackageExpiry, extractDisplayPackageExpiry } from "open-sse/services/usage/expiryExtractor.js";
 import { extractConnectionBalance, extractDailyGrantAndPermanent } from "open-sse/services/usage/balanceExtractor.js";
 import { getProviderQuotaCategory, PROVIDER_QUOTA_TYPES } from "open-sse/config/providerCategories.js";
 import { selectRelayCarrier } from "open-sse/services/relaySelection.js";
@@ -14,6 +14,8 @@ import { SENSITIVE_PROVIDERS } from "./backgroundTokenRefresh.js";
 import { hashApiKey } from "@/lib/db/crypto/apiKeyIdentity.js";
 import { errorResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
+import { SESSION_ROUND_ROBIN } from "open-sse/config/routingStrategies.js";
+import { accountSessions } from "open-sse/services/sessionAffinity.js";
 import { resolveRequestLocale, serverTranslate } from "@/i18n/serverTranslate.js";
 import * as log from "../utils/logger.js";
 
@@ -214,6 +216,10 @@ function triggerBackgroundQuotaRefresh(connections) {
         };
         const usage = await getUsageForProvider(conn, proxyOptions);
         const expiryInfo = extractEarliestPackageExpiry(usage);
+        // The quota wall's own reading (drained-but-refilling grants included) —
+        // persisted as `displayPackageExpiry` so a card's position on a paginated
+        // wall matches the countdown printed on it. Relay keeps `expiryInfo`.
+        const displayInfo = extractDisplayPackageExpiry(usage);
 
         // Family-partitioned pools (Antigravity: gemini_* / claude_gpt_*) must be
         // stored per family. A single merged reading lets the LONGEST window of
@@ -251,6 +257,12 @@ function triggerBackgroundQuotaRefresh(connections) {
         await updateProviderConnection(conn.id, {
           earliestPackageExpiry: expiryInfo?.expiry || null,
           earliestPackageName: expiryInfo?.name || null,
+          // Display-reading twin, persisted for the quota wall only (see
+          // expiryExtractor): the wall sorts and the card header count down by
+          // this, so a card's position cannot disagree with the number printed on
+          // it. Relay keeps ranking on `earliestPackageExpiry`.
+          displayPackageExpiry: displayInfo?.expiry || null,
+          displayPackageName: displayInfo?.name || null,
           // Live remaining-percentage of the most-constrained bucket — the
           // relay red-zone signal. Undefined when the provider has no
           // percentage quota (relay then degrades to "burn until 429").
@@ -500,7 +512,16 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const settings = await getSettings();
     // Per-provider strategy overrides global setting
     const providerOverride = (settings.providerStrategies || {})[providerId] || {};
-    const strategy = providerOverride.fallbackStrategy || settings.fallbackStrategy || "fill-first";
+    // 余额排序（小额/大额优先）在 PURE_BALANCE 供应商上是一等调度策略，
+    // 必须压过全局 fallbackStrategy —— 全局 round-robin 会按 lastUsedAt 重排，
+    // 把已经排好的余额序整个丢掉（用户 2026-11-26：Meoo 余额优先不生效）。
+    const balanceStrategy = providerOverride.balanceStrategy || null;
+    const balanceOrderingActive =
+      getProviderQuotaCategory(providerId) === PROVIDER_QUOTA_TYPES.PURE_BALANCE &&
+      (balanceStrategy === "lowest-first" || balanceStrategy === "highest-first");
+    const strategy = balanceOrderingActive
+      ? "fill-first"
+      : (providerOverride.fallbackStrategy || settings.fallbackStrategy || "fill-first");
     const earliestExpiryFirst = providerOverride.earliestExpiryFirst === true;
     // #Loomy-daily-first: burn each account's daily gift (use-it-or-lose-it)
     // before touching permanent points. Rank: highest daily-grant remaining
@@ -519,10 +540,12 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       // info, not debug: this is the one path that silently skips the refresh,
       // and a stale family column on the row is exactly what it causes.
       log.info("AUTH", `${providerId} | channel blocked (${Math.ceil(channelBlockLeftMs / 1000)}s left) — skipping quota refresh`);
-    } else if (dailyGrantFirst || (earliestExpiryFirst && availableConnections.length > 1)) {
-      // 两个快照驱动型调度都要新鲜的配额数据：新登录的账号没有持久化的
-      // dailyGrantRemaining/earliestPackageExpiry，不触发背景刷新就永远
-      // 落在 priority 组（#Loomy-daily-first 实测：新号 5000/5000 不参与排序）。
+    } else if (dailyGrantFirst || balanceOrderingActive || (earliestExpiryFirst && availableConnections.length > 1)) {
+      // 三个快照驱动型调度都要新鲜的配额数据：新登录的账号没有持久化的
+      // dailyGrantRemaining/earliestPackageExpiry/quotaBalance，不触发背景刷新就
+      // 永远落在 priority 组（#Loomy-daily-first 实测：新号 5000/5000 不参与排序）。
+      // 余额优先此前不在这道门里 —— 只有手动刷过配额的号才排得动，从没刷过的号
+      // quotaBalance 为 null 全落 priority 尾组，且毫无日志痕迹（2026-11-26）。
       triggerBackgroundQuotaRefresh(availableConnections);
     }
 
@@ -579,7 +602,6 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     // 排序键语义见 dailyGrantFirst 声明处（ earliestExpiryFirst 旁）。
     const isPackAssetProvider = quotaCategory === PROVIDER_QUOTA_TYPES.PACK_ASSET;
     const isPureBalanceProvider = quotaCategory === PROVIDER_QUOTA_TYPES.PURE_BALANCE;
-    const balanceStrategy = providerOverride.balanceStrategy || null;
 
     if (earliestExpiryFirst && poolConnections.length > 1) {
       const now = Date.now();
@@ -610,7 +632,17 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         const balA = typeof a.quotaBalance === "number" ? a.quotaBalance : null;
         const balB = typeof b.quotaBalance === "number" ? b.quotaBalance : null;
 
-        // Accounts without known balance sort last
+        // A drained account (balance <= 0) is spent: it must sink to the tail in
+        // BOTH directions. "Lowest balance first" is a spend-the-smallest-reward
+        // rule, not "try the empty one first" — before this, a 0-balance account
+        // sorted ahead of everything and every request burned a round on a
+        // guaranteed upstream 403 (2026-11-26 live: `balance-lowest-first
+        // selected f2b0d6e3 | balance=0`).
+        const drainedA = balA !== null && balA <= 0;
+        const drainedB = balB !== null && balB <= 0;
+        if (drainedA !== drainedB) return drainedA ? 1 : -1;
+
+        // Accounts without known balance sort last (but ahead of drained ones)
         if (balA !== null && balB === null) return -1;
         if (balA === null && balB !== null) return 1;
         if (balA !== null && balB !== null && balA !== balB) {
@@ -671,6 +703,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     // branches that log nothing (pinned / round-robin / fill-first) instead of
     // repeating the same tag twice for relay and pack-asset picks.
     let quotaLogged = false;
+    let commitSession;
+    const sessionPlan = strategy === SESSION_ROUND_ROBIN && !dailyRelayActive && !earliestExpiryFirst
+      ? accountSessions.plan(providerId, options.routingIdentity, connections.map((c) => c.id))
+      : null;
     // Pin to preferred connection if specified and available
     if (preferredConnectionId) {
       connection = orderedConnections.find((c) => c.id === preferredConnectionId);
@@ -741,7 +777,12 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       quotaLogged = true;
       // Persist the carrier stamp so subsequent requests keep using this account.
       await updateProviderConnection(connection.id, { lastUsedAt: new Date().toISOString() });
-    } else if (strategy === "round-robin") {
+    } else if (sessionPlan) {
+      const eligible = new Map(orderedConnections.map((c) => [c.id, c]));
+      connection = eligible.get(sessionPlan.order.find((id) => eligible.has(id)));
+      if (excludeSet.size === 0) sessionPlan.advance(connection.id);
+      commitSession = (ids) => sessionPlan.commit(connection.id, ids);
+    } else if (strategy === "round-robin" || strategy === SESSION_ROUND_ROBIN) {
       const stickyLimit = providerOverride.stickyRoundRobinLimit || settings.stickyRoundRobinLimit || 3;
 
       // Sort by lastUsed (most recent first) to find current candidate
@@ -785,6 +826,14 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       connection = orderedConnections[0];
     }
 
+    // 余额优先此前一行日志都不打（只有 earliest-expiry/relay/round-robin/pinned
+    // 有），用户无法自证生效，只能靠猜。与 earliest-expiry selected 同形状。
+    if (balanceOrderingActive && !quotaLogged && connection) {
+      const bal = typeof connection.quotaBalance === "number" ? connection.quotaBalance : null;
+      const unknown = orderedConnections.filter((c) => typeof c.quotaBalance !== "number").length;
+      log.info("AUTH", `${provider} | balance-${balanceStrategy} selected ${connection.id?.slice(0, 8)} (${connection.name || connection.email || "unnamed"}) | balance=${bal ?? "unknown"} | pool=${orderedConnections.length}${unknown > 0 ? ` (${unknown} unknown → priority tail)` : ""}`);
+    }
+
     if (earliestExpiryFirst && !quotaLogged && connection?.earliestPackageExpiry) {
       log.info("AUTH", `${zoneMarker(connection)} ${provider} | earliest-expiry selected ${connection.id?.slice(0, 8)} (${connection.name || connection.email || "unnamed"}) | expires in ${formatRetryAfter(connection.earliestPackageExpiry)} (${connection.earliestPackageName || "package"}) | ${quotaTag(connection, providerId, { family: targetFamily })}`);
     }
@@ -822,6 +871,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         strictProxy: connectionStrictProxy,
       },
       connectionId: connection.id,
+      ...(commitSession ? { commitSession } : {}),
       // Include current status for optimization check
       testStatus: connection.testStatus,
       lastError: connection.lastError,

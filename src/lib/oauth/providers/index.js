@@ -16,7 +16,6 @@ import qoderCn from "./qoder-cn.js";
 import qwenwork from "./qwenwork.js";
 import qwenworkCn from "./qwenwork-cn.js";
 import meoo from "./meoo.js";
-import croli from "./croli.js";
 import nous from "./nous.js";
 import junie from "./junie.js";
 import github from "./github.js";
@@ -28,6 +27,7 @@ import cline from "./cline.js";
 import clinepass from "./clinepass.js";
 import gitlab from "./gitlab.js";
 import codebuddyCn from "./codebuddy-cn.js";
+import quwork from "./quwork.js";
 import codebuddyIntl from "./codebuddy-intl.js";
 import kimchi from "./kimchi.js";
 import trae from "./trae.js";
@@ -36,6 +36,10 @@ import windsurf from "./windsurf.js";
 import zed from "./zed.js";
 import glm from "./glm.js";
 import muse from "./muse.js";
+import atomcode from "./atomcode.js";
+import clixad from "./clixad.js";
+import freepi from "./freepi.js";
+import xiaohuanxiong from "./xiaohuanxiong.js";
 import { minimaxCode, minimaxCodeGlobal } from "./minimax-code.js";
 
 // Provider configurations
@@ -52,7 +56,6 @@ const PROVIDERS = {
   qwenwork,
   "qwenwork-cn": qwenworkCn,
   meoo,
-  croli,
   nous,
   junie,
   github,
@@ -65,6 +68,7 @@ const PROVIDERS = {
   gitlab,
   "codebuddy-cn": codebuddyCn,
   "codebuddy-intl": codebuddyIntl,
+  quwork,
   kimchi,
   trae,
   "trae-cn": traeCn,
@@ -72,6 +76,10 @@ const PROVIDERS = {
   zed,
   glm,
   muse,
+  atomcode,
+  clixad,
+  freepi,
+  xiaohuanxiong,
   "minimax-code": minimaxCode,
   "minimax-code-global": minimaxCodeGlobal,
 };

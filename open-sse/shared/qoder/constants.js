@@ -54,6 +54,45 @@ export const QODER_MODEL_LIST_URL = `${QODER_CHAT_BASE}/algo/api/v2/model/list`;
 // COSY header constants. These are not arbitrary — the upstream signature
 // validation matches them against the values used at signing time.
 export const QODER_IDE_VERSION = "1.0.0";
+// Catalog-only version for the CN deployment. Qoder CN's `/model/list` gates
+// rows by `Cosy-Version`: at 1.0.0 the CN catalog returns 13 keys, at ≥1.2.0 it
+// also publishes `fast` (快速, 0.6x) — and `fast` has had a registry row since
+// 5058bcf7c, so with a 1.0.0 catalog the executor could never resolve its
+// model_config and every 快速 chat died with
+// `model_config for "fast" not yet known` (verified live 2026-11-25 against
+// three CN accounts).
+//
+// This raises ONLY the catalog read. The chat signature keeps QODER_IDE_VERSION:
+// the inference endpoint does not gate on it — `fast`'s config taken from a
+// 1.2.0 catalog answered 200 with a normal delta when signed at 1.0.0 — so the
+// request fingerprint stays exactly as before, and no unregistered upstream row
+// (intl's smodel/cmodel) leaks into the picker either.
+export const QODER_CN_CATALOG_VERSION = "1.2.0";
+// The catalog read also uses a different `Cosy-Clienttype`, shared by BOTH
+// regions. Qoder gates catalog membership on the client type as well as on the
+// version, and the two regions gate differently (2026-11-25, every CN account
+// plus the intl account, chat+app merged — i.e. exactly the set the executor
+// caches as model_config):
+//
+//   CN    ct=5 → 13 keys (no fast, no hmodel)
+//         ct=10 → 15 keys                     (= ct=0, field-for-field: 18
+//         ct=0  → 15 keys                        compared fields, zero diffs)
+//   INTL  ct=5 → 14 keys (no fast, no hmodel)
+//         ct=0 → 16 keys = ct=5 + fast + hmodel
+//         ct=10 → 18 keys — also `smodel` (Sonus, 8x) and `cmodel` (Cantus, 4x)
+//
+// ct=0 is the only value that reaches the official picker on both sides without
+// publishing rows we do not register: ct=10 would leak smodel/cmodel into
+// /v1/models and the "Fetch official catalog" import as rows we cannot price or
+// explain, and ct=1/3/4/7 leak the same pair. The version bump stays for CN —
+// upstream has moved each gate independently, so reading at the fingerprint
+// where the rows were confirmed is the defensive choice.
+//
+// Again the CATALOG READ ONLY: chat keeps signing at QODER_CLIENT_TYPE. Both
+// `fast` and `hmodel` answer normally when signed at the shipped CLI
+// fingerprint (see the registry notes for the evidence) — the gate is on
+// catalog visibility, not on inference admission.
+export const QODER_CATALOG_CLIENT_TYPE = "0";
 export const QODER_CLIENT_TYPE = "5";
 export const QODER_DATA_POLICY = "disagree";
 export const QODER_LOGIN_VERSION = "v2";

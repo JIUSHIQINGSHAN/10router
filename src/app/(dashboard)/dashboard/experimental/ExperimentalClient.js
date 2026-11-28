@@ -198,17 +198,18 @@ export default function ExperimentalClient() {
               }
             />
 
-            {/* Croli (croli.net) daily tasks — check-in (+100, streak bonus) and the
-                first-conversation gift (+200) fired as a real gateway say-hi on the
-                cheapest live model; both draw on the credits/trial pool. */}
+            {/* Croli 已下架（2026-11-28）：每日任务卡片与 croliCheckin 调度器一并摘除。 */}
+
+            {/* QuWork daily reward auto-claim — status-gated (claim only when
+                daily-reward/status says can_claim). */}
             <CheckinCard
-              title={translate("Croli auto daily tasks")}
-              desc={translate("Automatically run Croli daily tasks for every connection: check-in (+100, streak bonuses) and a gateway say-hi that triggers the first-conversation gift (+200) — both draw on the credits/trial pool")}
-              checked={settings.croliCheckin === true}
+              title={translate("QuWork auto daily reward")}
+              desc={translate("Automatically claim the QuWork daily sign-in points for every QuWork connection with an account token (checks status first, never blind-claims)")}
+              checked={settings.quworkCheckin === true}
               onToggle={() =>
                 patch(
-                  { croliCheckin: !(settings.croliCheckin === true) },
-                  "Error toggling Croli auto tasks:"
+                  { quworkCheckin: !(settings.quworkCheckin === true) },
+                  "Error toggling QuWork auto daily reward:"
                 )
               }
             />

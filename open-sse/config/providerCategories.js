@@ -33,6 +33,13 @@ const PACK_ASSET_PROVIDERS = new Set([
   "codebuddy-intl",
   "qoder",
   "qoder-cn",
+  // MiniMax Code 的积分桶是一次性到期包（usage/minimax-code.js ledgerBucketRow:
+  // detailOnly + recurring:false + 每桶自己的 expireAt），与 CodeBuddy/Qoder 同
+  // 性质。此前误归 PURE_BALANCE：开「到期优先」时红区号被 relay 下沉到队尾，
+  // 12-05 到期的包眼看烂掉还先烧 12-09 的（用户 2026-11-26「其他供应商优先
+  // 测量也有问题」实测现网 minimax-code 三红一黄）。
+  "minimax-code",
+  "minimax-code-global",
 ]);
 
 const ROLLING_SUBSCRIPTION_PROVIDERS = new Set([
@@ -53,8 +60,6 @@ const PURE_BALANCE_PROVIDERS = new Set([
   "anthropic",
   "minimax",
   "minimax-cn",
-  "minimax-code",
-  "minimax-code-global",
   "siliconflow-cn",
   "groq",
   "openrouter",
@@ -85,6 +90,29 @@ const PURE_BALANCE_PROVIDERS = new Set([
   "meoo",
   "qwenwork",
   "qwenwork-cn",
+  // 2026-11-26 补齐同一类（用户「再看看其他供应商优先测量也有问题」「比如
+  // quwork 也可以看下」）：以下供应商的 usage 都暴露一条**可路由的储值/积分
+  // 余额行**（extractConnectionBalance 认得它 → quotaBalance 落库），却因归在
+  // GENERIC 而在详情页**根本没有「大额/小额优先」这个选项**（GENERIC 分支只给
+  // 到期优先/轮询/手动三档）。归类只放开这个入口，默认仍是手动优先级；
+  // 「到期优先」的臂不受影响（earliestExpiryFirst 在排序与选择里都先判）。
+  //   quwork     — 源码注释：行形态与 Meoo 积分池同款（储值池）
+  //   dumate     — 「积分余额」isCreditBalance 行
+  //   lingxi     — 智点余额汇总行 isCreditBalance（桶行仍走到期优先）
+  //   deepai     — "Balance （Theos)" 行，注释写明 balanceExtractor claims it
+  //   autoclaw   — 钱包合计行，注释写明 name starting with "Balance"
+  //   clixad / freepi — 每日 credits 余额行 isCreditBalance
+  "quwork",
+  "dumate",
+  "lingxi",
+  "deepai",
+  "autoclaw",
+  "autoclaw-cn",
+  "clixad",
+  "freepi",
+  // ⚠️ croli 曾**刻意不加**（其 usage 注释明确「never insert wallet credits into
+  //  quotas」——钱包积分是账本奖励，不得成为路由信号）。2026-11-28 供应商下架，
+  // 该例外失去对象，原断言随测试一并移除；此处保留一行说明，防止下轮又有人补进来。
 ]);
 
 const GATEWAY_FREE_PROVIDERS = new Set([

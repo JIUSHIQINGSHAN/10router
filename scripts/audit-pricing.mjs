@@ -35,12 +35,15 @@ import {
 // jina-ai=embeddings, polly/playht/inworld=TTS, agnes-ai=image).
 export const EXEMPT_PROVIDERS = new Set([
   "opencode-go", "qoder", "qoder-cn", "kilo-gateway",        // credit plans
+  "qwenwork", "qwenwork-cn",                                 // 千问办公团队积分制（price_factor 是积分倍率，非 USD rate sheet；同 qoder 口径）
   "codebuddy-intl", "codebuddy-cn",                          // credit multipliers, no USD rate sheet
   "ollama", "lmstudio", "vllm",                              // local, free
   "cloudflare-ai", "github", "bazaarlink", "opencode", "iflow", // free tiers
   "cline", "clinepass", "cursor", "windsurf", "devin-cli", "commandcode", // subscription/credit plans
   "elevenlabs", "jina-ai", "aws-polly", "playht", "inworld", "agnes-ai", "agnes-ai-cn", // media-only vendors
   "junie",                                                   // JetBrains 免费车道（Junie Lite，免费按 0 计费）
+  "xiaohuanxiong",                                           // 小浣熊按积分计费（任务/邀请发放），无 USD rate sheet
+  "orcaterm",                                                // OrcaTerm 腾讯云账号车道（模型目录随账号，无 USD rate sheet）
 ]);
 // Registry `category` is the ACCESS kind (apikey/oauth/…), not modality — but
 // freeTier really does mean "no USD rate sheet" → provider-wide exemption.

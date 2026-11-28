@@ -10,7 +10,7 @@ import { ANTIGRAVITY_IDE_USER_AGENT } from "open-sse/providers/shared.js";
 import { GROK_CLI_PAGER_USER_AGENT, GROK_CLI_VERSION } from "open-sse/config/grokCli.js";
 import { resolveOllamaLocalHost, PROVIDERS } from "open-sse/config/providers.js";
 import { getUsageForProvider } from "open-sse/services/usage.js";
-import { extractEarliestPackageExpiry } from "open-sse/services/usage/expiryExtractor.js";
+import { extractEarliestPackageExpiry, extractDisplayPackageExpiry } from "open-sse/services/usage/expiryExtractor.js";
 import { resolveQoderModels } from "open-sse/services/qoderModels.js";
 import {
   amazonQuickListConversationsUrl,
@@ -44,12 +44,22 @@ import {
   KIMCHI_CONFIG,
 } from "@/lib/oauth/constants/oauth";
 import { buildClineHeaders } from "@/shared/utils/clineAuth";
-import { testCroliConnection } from "./croliConnection.js";
+import { testQuworkConnection } from "./quworkConnection.js";
+import { fetchOrcaTermBilling, refreshOrcaTermToken } from "open-sse/shared/orcaterm/auth.js";
 import { buildAccountValidationMessage } from "open-sse/utils/error.js";
 
 // OAuth provider test endpoints
 const OAUTH_TEST_CONFIG = {
   claude: { checkExpiry: true, refreshable: true },
+  // 小浣熊：model_catalog 用 IAM Bearer 直接探活（无 refresh_token，过期只能重扫）。
+  xiaohuanxiong: {
+    url: "https://xiaohuanxiong.com/api/web/llm/v2/model_catalog",
+    method: "GET",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: { Accept: "application/json" },
+    refreshable: false,
+  },
   codex: {
     url: "https://chatgpt.com/backend-api/codex/responses",
     method: "POST",
@@ -941,6 +951,26 @@ async function testAutoclawConnection(connection, effectiveProxy = null) {
 }
 
 async function testOAuthConnection(connection, effectiveProxy = null, options = {}) {
+  if (connection.provider === "orcaterm") {
+    let tokens = null;
+    let accessToken = connection.accessToken;
+    try {
+      if (isTokenExpired(connection)) {
+        tokens = await refreshOrcaTermToken(connection.refreshToken || accessToken, null, effectiveProxy);
+        // OrcaTerm renews only after the access token expires. A proactive renewal
+        // can therefore return null while the old grant remains valid; confirm it
+        // with the read-only billing endpoint before treating the account as dead.
+        if (tokens?.accessToken) accessToken = tokens.accessToken;
+      }
+      await fetchOrcaTermBilling(accessToken, effectiveProxy);
+      return {
+        valid: true, refreshed: !!tokens?.accessToken, newTokens: tokens, error: null,
+        ...(options.model ? { warning: "Account verified; model access is checked when sending a request" } : {}),
+      };
+    } catch (error) {
+      return { valid: false, error: error.message, refreshed: !!tokens, newTokens: tokens };
+    }
+  }
   // Qoder's test is model-aware and needs the live catalog — handled here, not
   // via OAUTH_TEST_CONFIG (which qoder-cn was never in, so it answered "Provider
   // test not supported" for an otherwise healthy account).
@@ -2022,10 +2052,8 @@ export async function testSingleConnection(id, options = {}) {
   // sk- key → /models, session cookie → Preview model — lives in the apikey
   // path's provider switch. Route xiaomi-mimo there regardless of authType,
   // otherwise the Test button reports "Provider test not supported".
-  // Croli verifies OAuth connectivity through its read-only balance endpoint;
-  // no model request is issued and no trial credits are spent.
-  if (connection.provider === "croli") {
-    result = await testCroliConnection(connection, effectiveProxy);
+  if (connection.provider === "quwork") {
+    result = await testQuworkConnection(connection, effectiveProxy);
   } else if (connection.provider === "meoo") {
     // Meoo routes here regardless of authType: the paste-key import stores
     // authType "oauth" (line ~101 of import-apikey), but its probe is the
@@ -2103,12 +2131,27 @@ export async function testSingleConnection(id, options = {}) {
         // never ran. The resolved proxy for this connection is `effectiveProxy`.
         const usage = await getUsageForProvider(mergedConn, effectiveProxy);
         const expiryInfo = extractEarliestPackageExpiry(usage);
+        const displayInfo = extractDisplayPackageExpiry(usage);
+        // Display-reading twin (see expiryExtractor) — the quota wall sorts on it,
+        // so it is written in BOTH branches: an account can have no ROUTING signal
+        // while still owing the wall a countdown, and skipping the write here would
+        // leave the card parked on a stale position until the next full refresh.
+        const displayPatch = {
+          displayPackageExpiry: displayInfo?.expiry || null,
+          displayPackageName: displayInfo?.name || null,
+        };
         if (expiryInfo) {
           await updateProviderConnection(id, {
             earliestPackageExpiry: expiryInfo.expiry || null,
             earliestPackageName: expiryInfo.name || null,
+            ...displayPatch,
             earliestPackageRemaining:
               typeof expiryInfo.remainingPercentage === "number" ? expiryInfo.remainingPercentage : null,
+            quotaCheckedAt: new Date().toISOString(),
+          });
+        } else if (usage?.quotas && displayInfo) {
+          await updateProviderConnection(id, {
+            ...displayPatch,
             quotaCheckedAt: new Date().toISOString(),
           });
         }
@@ -2118,5 +2161,12 @@ export async function testSingleConnection(id, options = {}) {
     })();
   }
 
-  return { valid: result.valid, error: result.error, refreshed: !!result.refreshed, latencyMs, testedAt: new Date().toISOString() };
+  return {
+    valid: result.valid,
+    error: result.warning || result.error,
+    warning: result.warning || null,
+    refreshed: !!result.refreshed,
+    latencyMs,
+    testedAt: new Date().toISOString(),
+  };
 }

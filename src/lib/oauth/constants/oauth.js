@@ -46,10 +46,8 @@ export const QWENWORK_CN_CONFIG = { ...PROVIDER_OAUTH["qwenwork-cn"] };
 // at login is what the gateway accepts (see providers/meoo.js).
 export const MEOO_CONFIG = { ...PROVIDER_OAUTH["meoo"] };
 
-// Croli（croli.net）— Clerk OAuth application（public client，PKCE S256，无 secret）。
-// issuer clerk.croli.net；credits 池与模型网关在不同域（ds.croli.net/credits 与
-// ds.croli.net/v1），sk 领取在 api.croli.net —— 由 registry 条目的 oauth 块携带。
-export const CROLI_CONFIG = { ...PROVIDER_OAUTH["croli"] };
+// Croli（croli.net）— 2026-11-28 下架：上游反复按客户端版本/风控改放行口径，通道不可靠。
+// registry 条目、oauth 实现与 CROLI_CONFIG 全部摘除（无残留 import 点）。
 
 // iFlow OAuth Configuration (Authorization Code)
 export const IFLOW_CONFIG = { ...PROVIDER_OAUTH["iflow"] };
@@ -76,6 +74,9 @@ export const OPENAI_CONFIG = { ...PROVIDER_OAUTH["openai"] };
 
 // GitHub Copilot OAuth Configuration (Device Code Flow)
 export const GITHUB_CONFIG = { ...PROVIDER_OAUTH["github"] };
+
+// 商汤小浣熊 OAuth Configuration (微信小程序扫码，复用 device_code 流)
+export const XIAOHUANXIONG_CONFIG = { ...PROVIDER_OAUTH["xiaohuanxiong"] };
 
 // Kiro OAuth Configuration (multi-method: AWS Builder ID / IDC / Social / Import Token)
 export const KIRO_CONFIG = { ...PROVIDER_OAUTH["kiro"] };
@@ -129,6 +130,11 @@ export const GITLAB_CONFIG = { ...PROVIDER_OAUTH["gitlab"] };
 
 // CodeBuddy (Tencent) OAuth Configuration (Browser OAuth Polling Flow)
 export const CODEBUDDY_CONFIG = { ...PROVIDER_OAUTH["codebuddy-cn"] };
+
+// QuWork（quwork.cn）— 手机号短信直登（阿里云滑块 + /api/sendVerifyCode +
+// /api/user/client/login），账号 token 经 refreshUrl 续期。端点由 registry 条目的
+// oauth 块携带。
+export const QUWORK_CONFIG = { ...PROVIDER_OAUTH["quwork"] };
 
 // CodeBuddy International — same shape as CN, .ai domain (mirror of codebuddy-cn).
 export const CODEBUDDY_INTL_CONFIG = { ...PROVIDER_OAUTH["codebuddy-intl"] };

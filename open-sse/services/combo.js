@@ -4,9 +4,13 @@
 
 import { checkFallbackError, formatRetryAfter, withRateLimitHint } from "./accountFallback.js";
 import { gateResponse } from "./sensitiveRetry.js";
-import { unavailableResponse } from "../utils/error.js";
+import { unavailableResponse, isTransportFault } from "../utils/error.js";
+import { isTransportCooling, recordTransportFailure, recordTransportSuccess, transportCoolingRemainingMs, resetComboBreaker, resetAllBreakers } from "./comboTransportBreaker.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
+import { SESSION_ROUND_ROBIN } from "../config/routingStrategies.js";
+import { comboSessions } from "./sessionAffinity.js";
+import { onSessionResponse } from "./sessionResponse.js";
 
 // Hard capabilities = input modalities; missing one drops request data (e.g. image
 // stripped). Must be prioritized. Soft (e.g. search) only degrades a feature.
@@ -297,6 +301,14 @@ export function getRotatedModels(models, comboName, strategy, stickyLimit = 0, s
 export function resetComboRotation(comboName) {
   if (comboName) comboRotationState.delete(comboName);
   else comboRotationState.clear();
+  comboSessions.reset(comboName);
+  // #176: the transport breaker is the same kind of in-memory scheduling state,
+  // and the caller is always a config save (combo PUT/DELETE) or a global
+  // settings PATCH. Editing a combo must not leave it parked behind a cooldown
+  // earned by the OLD topology. Kept here rather than at the call sites so a
+  // future caller cannot invalidate one and forget the other.
+  if (comboName) resetComboBreaker(comboName);
+  else resetAllBreakers();
 }
 
 /**
@@ -422,9 +434,13 @@ export function isZeroContentResponse(data) {
  *   before the gate stops engaging (each replay re-bills the full input context)
  * @returns {Promise<Response>}
  */
-export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 0, comboStickyWindowMinutes, autoSwitch = true, retryOnEmpty = false, retryOnEmptyLimit = DEFAULT_EMPTY_RETRY_LIMIT }) {
-  // Apply rotation strategy if enabled
-  let rotatedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit, comboStickyWindowMinutes);
+export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 0, comboStickyWindowMinutes, autoSwitch = true, retryOnEmpty = false, retryOnEmptyLimit = DEFAULT_EMPTY_RETRY_LIMIT, routingIdentity }) {
+  // Only chat callers opt in (routingIdentity is undefined for the media paths,
+  // null = chat without a reliable identity → session plan never engages).
+  const bySession = comboStrategy === SESSION_ROUND_ROBIN && routingIdentity !== undefined;
+  const plan = bySession && comboName && routingIdentity ? comboSessions.plan(comboName, routingIdentity, models) : null;
+  let rotatedModels = plan?.order
+    || getRotatedModels(models, comboName, comboStrategy === SESSION_ROUND_ROBIN ? "round-robin" : comboStrategy, comboStickyLimit, comboStickyWindowMinutes);
 
   // Auto-switch: float models that satisfy the request's required capabilities to the front.
   if (autoSwitch) {
@@ -438,6 +454,27 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
     }
   }
   
+  // #176 transport breaker: a seat whose upstream has repeatedly given NO answer
+  // at all (no HTTP status — TCP hangs or refuses) gets pushed to the BACK of the
+  // order instead of being probed first on every request. Deferred, never
+  // dropped: if every healthier member also fails, the cooled one still runs as
+  // the last resort, so a live-but-flaky channel is never removed from rotation.
+  // Runs AFTER capability auto-switch (a member that stays reachable keeps its
+  // front seat) and keeps relative order inside each group.
+  if (comboName && rotatedModels.length > 1) {
+    const healthy = [];
+    const cooled = [];
+    for (const m of rotatedModels) {
+      (isTransportCooling(comboName, m) ? cooled : healthy).push(m);
+    }
+    if (cooled.length && healthy.length) {
+      rotatedModels = [...healthy, ...cooled];
+      log.warn("COMBO", `${cooled.length}/${rotatedModels.length} member(s) transport-dead, deferred to the back: ${cooled.map((m) => `${m}(${Math.round(transportCoolingRemainingMs(comboName, m) / 1000)}s)`).join(", ")}`);
+    }
+  }
+
+  if (plan) plan.advance(rotatedModels[0]);
+
   let lastError = null;
   let earliestRetryAfter = null;
   let lastStatus = null;
@@ -449,7 +486,24 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
 
     try {
       const result = await handleSingleModel(body, modelStr);
-      
+
+      // #176 transport breaker verdict, BEFORE the zero-content / empty-retry
+      // paths below (those also end in a `continue`, and must still record).
+      // The symbol is read here because a JSON .clone() of the Response drops it.
+      //   - a 2xx seat, or any seat that answered with a real HTTP status, RESETS
+      //     the streak (came back → deferred, not removed);
+      //   - only a seat that produced NO HTTP answer AT ALL accumulates one.
+      if (comboName) {
+        if (result.ok || !isTransportFault(result)) {
+          recordTransportSuccess(comboName, modelStr);
+        } else {
+          const { trips, cooldownMs } = recordTransportFailure(comboName, modelStr);
+          if (cooldownMs) {
+            log.warn("COMBO", `member ${modelStr} transport-dead (trip ${trips}) → cooling ${Math.round(cooldownMs / 1000)}s (deferred, not dropped)`);
+          }
+        }
+      }
+
       // Success (2xx) - return response
       if (result.ok) {
         // Success (2xx) - return response unless empty/zero-content on a non-final seat
@@ -496,12 +550,15 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
             continue;
           }
           log.info("COMBO", `Model ${modelStr} succeeded`);
+          if (plan) onSessionResponse(gate.response, (ids) => plan.commit(modelStr, ids), result);
+          else if (routingIdentity && gate.response !== result) onSessionResponse(gate.response, null, result);
           return gate.response;
         }
         if (retryOnEmpty && hasFallback && emptyRetries >= retryOnEmptyLimit) {
           log.warn("COMBO", `Model ${modelStr}: empty-retry budget (${retryOnEmptyLimit}) exhausted, returning response as-is`);
         }
         log.info("COMBO", `Model ${modelStr} succeeded`);
+        if (plan) onSessionResponse(result, (ids) => plan.commit(modelStr, ids));
         return result;
       }
 

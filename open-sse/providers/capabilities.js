@@ -23,6 +23,8 @@
 // 2.0+, Grok, Perplexity). Verify with: curl -s https://models.dev/api.json
 
 import { matchPattern } from "./pricing.js";
+import { ORCATERM_CONFIG, ORCATERM_MODELS } from "../config/orcaterm.js";
+import { ATOMCODE_MODELS } from "../config/atomcode.js";
 
 /**
  * Safe floor — every resolved result is merged over this so consumers
@@ -116,6 +118,10 @@ export const MODEL_CAPABILITIES = {
   "ling-3.0-flash-fin-free":   { reasoning: true, thinkingFormat: "openai", contextWindow: 131072, maxOutput: 32768 },
   // 3.1 窗口翻倍到 256K（models.dev opencode 262144/32768），仍纯文本进。
   "ling-3.1-flash-free":       { reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 32768 },
+  // 裸键 ling-3.1-flash（无 -free 后缀）：QwenWork CN live 目录 2026-11-25 上架
+  // （限时1折 0.1x，is_vl:false 纯文本）。models.dev llmgateway 条目报 1M/32768。
+  // 不写会落 `*ling-*` 兜底（128K、无 thinkingFormat），窗口被砍 1/8。
+  "ling-3.1-flash":            { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 32768 },
   "nemotron-3-ultra-free":     { reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 65536 },
   "nemotron-3.5-lightning-free": { reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 65536 },
   "claude-opus-5-thinking-agentic": {pdf: true,  vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
@@ -173,6 +179,11 @@ export const MODEL_CAPABILITIES = {
   // 改它们会波及别人，因此只加精确行。来源都是第一方 models.dev 条目；与转售商冲突时
   // 取第一方。
   "glm-5.3":        { reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 }, // zai + zhipuai 一致；thinking 不可关闭
+  // GLM-5.4（2026-11-23 发布，models.dev zai/zhipuai-coding-plan 两条一致）：多模态旗舰
+  // text+image+video+pdf、1M/131072、reasoning effort low/high/max。QwenWork CN live 目录
+  // 同日上架（2026-11-25 探测，1.2x 首发上线），id 与第一方同名——与 glm-5.3 同理由写
+  // canonical。不写会落 `*glm-5*` 兜底：200K 窗口、vision:false，图片被剥。
+  "glm-5.4":        { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 },
   "glm-5.2":        { reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 }, // zhipuai：窗口 1M
   "glm-5.1":        { reasoning: true, thinkingFormat: "zai", contextWindow: 200000, maxOutput: 131072 }, // zhipuai：窗口与兜底同值，只有输出上限要改
   "glm-5":          { reasoning: true, thinkingFormat: "zai", contextWindow: 204800, maxOutput: 131072 }, // zai + zhipuai（models.dev 已标 deprecated）
@@ -332,16 +343,21 @@ export const MODEL_CAPABILITIES = {
   // text+image+video 进）。codebuddy-cn 的同名条目在 provider 层优先，不受影响。
   "space-bunny":               { vision: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 524288 },
   // MiniMax Code（CreditDaddy MiniMax 线实测 + 官方客户端设置面板 2026-10-03）：
-  //   - M3.1-Flash-Preview：思考深度五档（default/low/medium/high/xhigh/max，
+  //   - M3.1-Flash：思考深度五档（default/low/medium/high/xhigh/max，
   //     无 off → canDisable:false），thinking.effort 由 minimax 形态透传；
   //   - M3：思考是开/关切换（客户端有「思考」开关、无档位）→ canDisable:true,
   //     显式成行修正 *minimax-m3* pattern 的 canDisable:false（该行写于 M3 无
   //     开关的旧认知）；上下文 512K/1M 两档是 MiniMax 侧的用量分档（1M 用量
   //     较高），能力表按上限声明。
-  // 正式 id 与 -Preview 各占一行、数值一致（issue #71）：不写正式行会落到
+  // 正式 id 与旧 -Preview 各占一行、数值一致（issue #71）：不写正式行会落到
   // `*minimax-m3*` 家族兜底，videoInput 丢失（视频块被剥）、maxOutput 压到
   // 131072、thinkingCanDisable 语义错位——全是静默掉档，没有任何报错。
   "MiniMax-M3.1-Flash":         { vision: true, videoInput: true, reasoning: true, thinkingFormat: "minimax", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 512000 },
+  // `-Preview` 已于 2026-11-25 从三条 minimax-code 线下架（用户口径，正式 id 上位满
+  // 一个周期），但本行与下面的小写行**故意留着**：注册表不是请求闸（`isValidModel`
+  // 无调用方、`getModelUpstreamId` 原样透传），存量组合 / modelLock / disabledModels
+  // 里写过旧 id 的请求仍会带着它走到这里；删行就落 `*minimax-m3*` 兜底，踩回 #71
+  // 那个静默掉档的坑（剥 videoInput、512000→131072）。转售商目录若还在下发该 id 同理。
   "MiniMax-M3.1-Flash-Preview": { vision: true, videoInput: true, reasoning: true, thinkingFormat: "minimax", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 512000 },
   // 小写 / 命名空间拼写（tokenrouter 的 `minimax/minimax-m3.1-flash` 一类）。
   // canonical 查表区分大小写，不写这两行会落到 `*minimax-m3*` 家族兜底：
@@ -398,6 +414,31 @@ const CODEX_EXTENDED_CAPS = { ...CODEX_GPT_56_DEFAULT_CAPS, contextWindow: 87200
 // 否则回落到 `*gpt-5*` 通配时 vision/search 字段会丢（上游 89ffac5a）。
 const DEVIN_CLI_GPT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 128000 };
 
+// Gemini 4 Hydrogen (Sonar) on Antigravity — one profile, four registry ids
+// (the bare live entity + three tier aliases routed onto it, #174). Values come
+// from the live fetchAvailableModels row (2026-11-26, identical on 3 accounts):
+// maxTokens 1048576 / maxOutputTokens 65536 / supportsImages / supportsVideo /
+// supportsThinking with minThinkingBudget 32. Image input was additionally
+// confirmed with a real 32×32 two-colour PNG (answered the correct colour);
+// video rests on the catalog declaration only, not probed. thinkingCanDisable:
+// false matches the 400 "Thinking level MINIMAL is not supported for this
+// model" the live entity answers — same always-on contract as the *gemini-4*
+// pattern, restated here because the output ceiling differs.
+const GEMINI_4_HYDROGEN_CAPS = {
+  vision: true,
+  videoInput: true,
+  // supportedMimeTypes on the same row carries application/pdf — declared here
+  // so replacing the *gemini-4* pattern (which also said pdf:true) does not
+  // quietly start stripping documents.
+  pdf: true,
+  reasoning: true,
+  search: true,
+  thinkingFormat: "gemini-level",
+  thinkingCanDisable: false,
+  contextWindow: 1048576,
+  maxOutput: 65536,
+};
+
 // Qoder 的客户端还可以按 registry 的显示名寻址（如 "qoder/Qwen3.8-Max"）。没有
 // 别名时这些名字会绕过 provider 行，落进通用族 pattern（*qwen*max* 等）或地板，
 // 拿到的是「思考可关」的通用语义——与 qoder 执行器丢弃客户端 thinking 意图、
@@ -428,6 +469,9 @@ const QODER_NAME_ALIASES = {
   "Kimi-K3.1-Pro": "kmodel_latest",
   "Kimi-K2.8-Preview": "kmodel",
   "GLM-5.3": "gmodel",
+  // 2026-11-25 live 探测双端：GLM-5.4 是独立 key `gmodel_latest`（0.8x、
+  // tags:[new]），不是 GLM-5.3 的别名。
+  "GLM-5.4": "gmodel_latest",
   "GLM-5.3-Flash": "gfmodel",
   "DeepSeek-V4-Pro": "dmodel",
   // Qoder 2026-10 起把 dfmodel 显示为 DeepSeek-V4.1-Flash-1017（客户端模型卡确认）。
@@ -437,6 +481,9 @@ const QODER_NAME_ALIASES = {
   // DeepSeek-V4.1-Flash 1017 不再出现在目录，别名移除（dead row 会被 audit 判）。
   "DeepSeek-Flash": "dfmodel",
   "MiniMax-M3.1-Flash": "mmodel",
+  // HungerG（`hmodel`）双端官方选型器都有（Free 徽章 / 0x），目录按
+  // Cosy-Clienttype 门控，QODER_CATALOG_CLIENT_TYPE 起才下发。
+  "HungerG": "hmodel",
 };
 const QODER_CN_NAME_ALIASES = {
   ...QODER_NAME_ALIASES,
@@ -450,6 +497,22 @@ const QODER_CN_NAME_ALIASES = {
  * Provider-specific capability overrides. Keyed by provider alias/id.
  */
 export const PROVIDER_CAPABILITIES = {
+  orcaterm: Object.fromEntries(ORCATERM_MODELS.map((model) => [model.id, {
+    vision: model.vision === true,
+    reasoning: true,
+    thinkingFormat: "openai",
+    contextWindow: 128000,
+    maxOutput: ORCATERM_CONFIG.maxOutputTokens,
+    tools: true,
+  }])),
+  atomcode: Object.fromEntries(ATOMCODE_MODELS.map((model) => [model.id, {
+    vision: model.vision === true,
+    reasoning: true,
+    thinkingFormat: "openai",
+    contextWindow: model.contextWindow,
+    maxOutput: model.maxOutput,
+    tools: true,
+  }])),
   // Kilo Gateway 的 `kilo-auto/*` 是**路由器档位**（上游自己决定落到哪个模型），
   // id 里没有任何模型家族线索，因此全部落 DEFAULT_CAPABILITIES（200K/64K、
   // vision:false）。kilo 官方条目给出了每档的实际承诺（2026-10-20 models.dev
@@ -492,6 +555,19 @@ export const PROVIDER_CAPABILITIES = {
     "gemini-4-argon-high":     { vision: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 1048576 },
     "gemini-4-argon-medium":   { vision: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 1048576 },
     "gemini-4-argon-low":      { vision: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 1048576 },
+    // Gemini 4 Hydrogen (Sonar): spec read off the live fetchAvailableModels row
+    // (2026-11-26, 3 accounts identical): 1M in / **65536** out, images + video,
+    // thinking always-on. Without these rows the id resolves through the
+    // `*gemini-4*` pattern, which carries the Argon-locked 1M output and no
+    // videoInput — over-promising the window (clients read
+    // `max_completion_tokens` from it) and hiding a modality the catalog
+    // declares. All four registry ids (the bare entity + the three tier aliases
+    // that route onto it, #174) share one object.
+    "gemini-4-hydrogen-sonar":  GEMINI_4_HYDROGEN_CAPS,
+    "gemini-4-hydrogen":        GEMINI_4_HYDROGEN_CAPS,
+    "gemini-4-hydrogen-high":   GEMINI_4_HYDROGEN_CAPS,
+    "gemini-4-hydrogen-medium": GEMINI_4_HYDROGEN_CAPS,
+    "gemini-4-hydrogen-low":    GEMINI_4_HYDROGEN_CAPS,
     "gemini-pro-agent": {
       vision: true,
       audioInput: true,
@@ -584,34 +660,55 @@ export const PROVIDER_CAPABILITIES = {
   },
   // AutoClaw（智谱澳龙）国际/国内两线同一模型目录：zai_/zaicoding_ 前缀的
   // 路由 id 不命中任何 canonical/家族 pattern（会落 DEFAULT 200K 且无
-  // reasoning）。上游 1M 窗口；思考变体只有 low/high/max（无关闭档，见
-  // thinkingLevels.js），走 openai reasoning_effort，executor 再钳一次。
-  // max_tokens 族在 executor 里一律剥掉（上游 406），maxOutput 仅作展示。
+  // reasoning）。窗口/输出按客户端目录接口 autoclaw-model-config 的
+  // contextWindow / maxTokens 逐行声明（2026-11-26 live）：五行 1M，
+  // FlashX-Legal 只有 300K；输出 393216 / 307200 / 131072 三档，此前
+  // 全表一律 131072 把 Auto 的 393216 与两个旗舰的 307200 压掉了。
+  // 思考变体只有 low/high/max（无关闭档，见 thinkingLevels.js），走
+  // openai reasoning_effort，executor 再钳一次。max_tokens 族在 executor
+  // 里一律剥掉（上游 406），maxOutput 仅作展示。
+  //
+  // vision 按目录 input 数组 + 四象限判别图实测（带图 prompt_tokens
+  // 59→161 且四色答对才算真视觉，Loomy #179 的教训）：五行 true，
+  // zaicoding_glm-5.3 目录 input:["text"]、带图实测 500 → false。
+  // ⚠️ GLM-5.4 的路由键是 zai_glm-x-preview，不是 zai_glm-5.4。
+  // intl 端无可用账号，两线继续共用同一目录（结构未变）；CN 已实测。
   "autoclaw": {
-    "zai_auto":           { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
-    "zai_auto-fast":      { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
-    "zai_glm-5.3-flash":  { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
-    "zaicoding_glm-5.3":  { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+    "zai_auto":                { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 393216 },
+    "zai_auto-fast":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 131072 },
+    "zai_glm-x-preview":       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 307200 },
+    "zaicoding_glm-5.3":       { vision: false, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 307200 },
+    "zai_glm-5.3-flash":       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 131072 },
+    "zai_glm-5.3-flashx-legal":{ vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 307200, maxOutput: 131072 },
   },
   "autoclaw-cn": {
-    "zai_auto":           { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
-    "zai_auto-fast":      { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
-    "zai_glm-5.3-flash":  { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
-    "zaicoding_glm-5.3":  { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+    "zai_auto":                { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 393216 },
+    "zai_auto-fast":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 131072 },
+    "zai_glm-x-preview":       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 307200 },
+    "zaicoding_glm-5.3":       { vision: false, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 307200 },
+    "zai_glm-5.3-flash":       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 131072 },
+    "zai_glm-5.3-flashx-legal":{ vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 307200, maxOutput: 131072 },
   },
   // 讯飞 Loomy 免费活动池（内置 freeTier 收录）。上游模型 id 大小写敏感
   // （DeepSeek-V4.1-Flash 大写开头），大写不命中 canonical 键会掉进
-  // *deepseek-v4* 文本档（vision 被剥）与 *qwen* / *glm-5* 通用档（输出被压
-  // 到 65536 / 128000）——按各家族第一方剖面全量显式声明。
-  // spark-x2.6 无公开规格（讯飞自家模型，×0.0 免费），保留 floor + allowlist。
+  // *deepseek-v4* 文本档与 *qwen* / *glm-5* 通用档（输出被压到
+  // 65536 / 128000）——窗口/输出/思考形态按各家族第一方剖面全量显式声明。
+  // spark-x2.6 无公开规格（讯飞自家模型），保留 floor + allowlist。
+  // 2026-11-25 live /models：spark-x2.6 限时免费结束（×2.5），0731/mimo-v2.5
+  // 下架，新增 deepseek-v4-flash-1017（与 V4.1-Flash 同剖面，1M/384K）。
+  // ⚠️ vision 一律 false（#179）：live /models 虽标 text+image，但公开 Bearer
+  // 通道 loomyad.xunfei.cn/api/v1/chat/completions 实为文本通道——标准
+  // image_url 请求 400「请求有误」，个别 200 也只是把 base64 当文本读（模型
+  // 自述无法解码）。Web 客户端的附件走 /api/chat/files + file_ref 私有协议，
+  // 当前 transport 够不到（404 / 409 Server Action unavailable）。声明 true
+  // 会让组合把图片优先派给 Loomy 然后拿到假答案；false 则让通用视觉兜底
+  // （reorderByCapabilities 硬能力分层）把图片让给真正能读图的成员。将来
+  // 若做 Web 附件 executor 再恢复 vision。
   "loomy": {
-    "qwen3.8-flash":          { vision: true, reasoning: true, thinkingFormat: "qwen", contextWindow: 1000000, maxOutput: 131072 },
-    "DeepSeek-V4.1-Flash":    { vision: true, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
-    "deepseek-v4-flash-0731": { vision: false, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
-    "GLM-5.3-Flash":          { vision: true, reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 },
-    // mimo-v2.5（2026-11-08 新增，live /models 实测）：全模态输入（image/audio/video），
-    // reasoning_efforts 档位（none→xhigh）→ openai 形状；窗口 1048576（live 原值）。
-    "mimo-v2.5":              { vision: true, audioInput: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 },
+    "qwen3.8-flash":            { vision: false, reasoning: true, thinkingFormat: "qwen", contextWindow: 1000000, maxOutput: 131072 },
+    "DeepSeek-V4.1-Flash":      { vision: false, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
+    "deepseek-v4-flash-1017":   { vision: false, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
+    "GLM-5.3-Flash":            { vision: false, reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 },
   },
   // Capy 的广告档模型 id 带 `-ads` 后缀（`deepseek/deepseek-v4.1-flash-ads`、
   // `zai/glm-5.3-flash-ads`），既不是 canonical 名也不命中家族 pattern 的完整
@@ -766,16 +863,17 @@ export const PROVIDER_CAPABILITIES = {
     // 与 hy4 的 1M 不同窗。Hy 同族思考强制常开；vision/reasoning 暂按 Hy 同档
     // 声明（「Agent 任务又快又省」官方定位，待服务端 product-config 校准）。
     "hy4-flash":          { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 960000, maxOutput: 64000 },
-    // Hy4 flash（客户端 2026-11-16 正式发布，日常主力档）：卡片 960K 上下文，
-    // 与 hy4 的 1M 不同窗。Hy 同族思考强制常开；vision/reasoning 暂按 Hy 同档
-    // 声明（「Agent 任务又快又省」官方定位，待服务端 product-config 校准）。
-    "hy4-flash":          { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 960000, maxOutput: 64000 },
     // Space-Bunny（官方应用 2026-10-02 上架）：原生多模态输入 → vision:true；
     // 思考"极致"档与 Hy 系同族（强制常开，canDisable:false 待服务端
     // product-config 回来后校准）；1M 输入，输出上限暂取 Hy 同档 64000。
     "space-bunny":        { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 64000 },
     "glm-5.3":            { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 48000 },
     "glm-5.3-flash":      { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 32000 },
+    // GLM-5.4（客户端 2026-11-25 第五版清单新上，0.69x）：CN 网关 product-config
+    // 尚未取到，形态暂按 canonical glm-5.4 行（1M/131072、全模态）压到 openai
+    // 思考形状（transport 已写死 openai，provider 行优先）；maxOutput 待
+    // product-config 校准——先按 glm-5.3 的 48000 夹，宁小勿大（真夹子）。
+    "glm-5.4":            { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 48000 },
     "kimi-k3":            { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 32000 },
     // DeepSeek-V4-Pro：纯文本（模型卡 text→text；models.dev 124 条命中一致报
     // attach:false，火山方舟第一方 deepseek-v4-pro-ga-260813 亦然）。1M 输入 /
@@ -858,6 +956,7 @@ export const PROVIDER_CAPABILITIES = {
     "dmodel":         { vision: true, reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4-Pro（live 1M）
     "dfmodel":        { vision: true, reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4.1-Flash-1017（dfmodel）
     "gmodel":         { vision: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },      // GLM-5.3
+    "gmodel_latest":  { vision: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 }, // GLM-5.4（2026-11-25 live 双端 gmodel_latest，is_vl true；maxOutput 跟 canonical glm-5.4 行）
     "gfmodel":        { vision: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // GLM-5.3-Flash（live 1M）
     "kmodel_latest":  { vision: true, reasoning: true, thinkingFormat: "kimi", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },      // Kimi-K3.1-Pro
     "kmodel":         { vision: true, reasoning: true, thinkingFormat: "kimi", thinkingCanDisable: false, contextWindow: 256000, maxOutput: 65536 },  // Kimi-K2.8-Preview
@@ -867,10 +966,19 @@ export const PROVIDER_CAPABILITIES = {
     "qmodel":         { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // Qwen3.7-Plus
     "qfmodel":        { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // Qwen3.8-Flash
     "qmodel_38max":   { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },      // Qwen3.8-Max
+    // HungerG（`hmodel`，2026-11-25 双端 live 探测）：is_vl/is_reasoning true、
+    // 1M、price_factor 0 + tags:[free]。底座未知，thinkingFormat 取条目自己声明
+    // 的 `format:"openai"`（不猜家族）；max_output_tokens 上游一律回 0，按
+    // qoder 行的众数 65536 保守夹（宁小勿大），待上游给出真实上限再抬。
+    "hmodel":         { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },
+    // Fast（`fast`，国际版 2026-11-25 与 CN 同批上架）：虚拟路由档，同 CN 的
+    // 快速与 auto/efficient 形状。注意双端 is_reasoning 不同（CN true / intl
+    // false），但那是 model_config 选择用的旗标，不代表模型不能推理。
+    "fast":           { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
     // lmodel（QoDuck）2026-11-11 转正为 Qwen4-Max-Preview（key qmodel_latest），
     // INTL live 目录已无 lmodel —— 行随注册表撤下；CN 侧（app 场景 key 可能仍
     // 下发）保留独立行。
-  }, { ...QODER_NAME_ALIASES, "Auto": "auto", "Ultimate": "ultimate", "Performance": "performance", "Efficient": "efficient" }),
+  }, { ...QODER_NAME_ALIASES, "Auto": "auto", "Ultimate": "ultimate", "Performance": "performance", "Efficient": "efficient", "Fast": "fast" }),
   "qoder-cn": aliased({
     // 虚拟档：家族随上游路由漂移，给保守超集（与 INTL 侧的 auto/efficient 同形状）。
     "auto":           { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // 虚拟档：家族随上游路由漂移，给保守超集
@@ -878,6 +986,13 @@ export const PROVIDER_CAPABILITIES = {
     "dmodel":         { vision: true, reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4-Pro
     "dfmodel":        { vision: true, reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4.1-Flash-1017（dfmodel）
     "gmodel":         { vision: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },      // GLM-5.3
+    "gmodel_latest":  { vision: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 }, // GLM-5.4（2026-11-25 live CN gmodel_latest，is_vl true）
+    // HungerG（`hmodel`，2026-11-25 桌面指纹目录实测下发）：is_vl/is_reasoning
+    // true、max_input_tokens 1M。底座未知，所以 thinkingFormat 直接取条目自己
+    // 声明的 `format:"openai"`（不猜家族）；max_output_tokens 上游一律回 0，
+    // 按 qoder 行的众数 65536 保守夹（宁小勿大，同 codebuddy-cn glm-5.4 的
+    // 处理），待上游给出真实上限再抬。
+    "hmodel":         { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },
     "gfmodel":        { vision: true, reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // GLM-5.3-Flash
     "gm51model":      { reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 48000 },       // GLM-5.2
     "kmodel_latest":  { vision: true, reasoning: true, thinkingFormat: "kimi", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },      // Kimi-K3.1-Pro

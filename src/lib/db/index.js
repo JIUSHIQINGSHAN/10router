@@ -10,7 +10,8 @@ import {
 
 // Settings
 export {
-  getSettings, updateSettings, mutateSettingsMap, isCloudEnabled, getCloudUrl, exportSettings,
+  getSettings, updateSettings, mutateSettingsMap, setProviderStrategyOverride,
+  isCloudEnabled, getCloudUrl, exportSettings,
   getChannelBlock, setChannelBlock, clearChannelBlock,
 } from "./repos/settingsRepo.js";
 
@@ -148,6 +149,10 @@ export async function importDb(payload) {
     db.run(`DELETE FROM proxyPools`);
     db.run(`DELETE FROM apiKeys`);
     db.run(`DELETE FROM combos`);
+    // Not part of a portable backup (see BACKUP_EXCLUDE_TABLES), but a restore
+    // still has to clear it: leftover continuations would resolve against the
+    // conversation the backup did not carry.
+    db.run(`DELETE FROM responsesStore`);
     db.run(`DELETE FROM kv WHERE scope IN ('modelAliases', 'customModels', 'mitmAlias', 'pricing')`);
 
     // Settings

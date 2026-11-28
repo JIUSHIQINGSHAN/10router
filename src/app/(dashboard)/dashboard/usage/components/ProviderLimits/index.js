@@ -204,6 +204,12 @@ const KNOWN_PROVIDER_NAMES = {
   "crowllm": "CrowLLM",
   "autoclaw": "AutoClaw",
   "autoclaw-cn": "AutoClaw CN",
+  "atomcode": "AtomCode",
+  "clixad": "Clixad",
+  "freepi": "FreePi",
+  "xiaohuanxiong": "商汤小浣熊",
+  "orcaterm": "OrcaTerm",
+  "quwork": "QuWork",
 };
 
 export default function ProviderLimits() {
@@ -461,8 +467,6 @@ export default function ProviderLimits() {
         plan: data.plan || null,
         message: data.message || null,
         raw: data,
-        ...(provider === "croli" && Number.isFinite(data.croli?.walletPoints)
-          ? { croliWalletPoints: data.croli.walletPoints } : {}),
         cachedAt: new Date().toISOString(),
       };
 
@@ -1182,6 +1186,25 @@ export default function ProviderLimits() {
     };
   }, [autoRefresh, refreshAll, hasHydratedAutoRefresh, refreshIntervalMs]);
 
+  // The hourglass sort must rank on the SAME rows the card prints, and the card
+  // only ever counts VISIBLE rows (`QuotaPackBar packs={visibleQuotas}`). Hiding
+  // a row is the user saying "that one is not my signal" — ranking by it would
+  // put a card in a position its own header cannot explain, which is the exact
+  // complaint this pass fixes. Built once per (page, quota, visibility) instead of
+  // per card, so the sort and the render still read identical row sets.
+  const visibleSortQuotaData = useMemo(() => {
+    const out = {};
+    for (const conn of connections) {
+      const entry = quotaData[conn.id];
+      if (!entry) continue;
+      out[conn.id] = {
+        ...entry,
+        quotas: filterQuotasByVisibility(conn.id, entry.quotas || [], quotaVisibility, conn.provider),
+      };
+    }
+    return out;
+  }, [connections, quotaData, quotaVisibility]);
+
   const sortedConnections = useMemo(
     () =>
       sortVisibleConnections(
@@ -1190,8 +1213,9 @@ export default function ProviderLimits() {
         expiringFirst,
         providerFilter,
         quotaSortMode,
+        visibleSortQuotaData,
       ),
-    [connections, quotaData, expiringFirst, providerFilter, quotaSortMode],
+    [connections, quotaData, visibleSortQuotaData, expiringFirst, providerFilter, quotaSortMode],
   );
 
   /**
@@ -1769,7 +1793,7 @@ export default function ProviderLimits() {
                     </span>
                     <p className="mt-1.5 text-xs text-text-muted">{error}</p>
                   </div>
-                ) : quota?.message && !Number.isFinite(quota?.croliWalletPoints) ? (
+                ) : quota?.message ? (
                   <div className="text-center py-5">
                     <p className="text-xs text-text-muted">{quota.message}</p>
                   </div>
@@ -1781,12 +1805,6 @@ export default function ProviderLimits() {
                         rather than as a filtered one. Say what happened instead.
                         Every hidden row is reachable from the chips below, so
                         point at them. */}
-                    {conn.provider === "croli" && Number.isFinite(quota?.croliWalletPoints) && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-2 text-xs" data-croli-wallet-display="true">
-                        <span className="text-text-muted">{translate("Croli wallet balance")} <span className="font-medium text-text">{quota.croliWalletPoints.toLocaleString()}</span> {translate("credits")}</span>
-                        <span className="text-text-muted">{translate("Separate from daily trial quota")}</span>
-                      </div>
-                    )}
                     {visibleQuotas.length === 0 && rawQuotas.length > 0 && (
                       <div className="text-center py-5">
                         <span className="material-symbols-outlined text-[28px] text-text-muted opacity-40">

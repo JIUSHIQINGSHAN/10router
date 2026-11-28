@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getSettings, updateSettings } from "@/lib/localDb";
+import { getSettings, updateSettings, setProviderStrategyOverride } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
+import { accountSessions } from "open-sse/services/sessionAffinity.js";
 import bcrypt from "bcryptjs";
 import { isAutoUpdateCheckEnabled, syncUpdateCheckMarker } from "@/lib/updateCheck";
 import { hasOwnDashboardCredential, setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
@@ -109,7 +110,29 @@ export async function PATCH(request) {
       }
     }
 
+    // Per-provider strategy saves must never replace the whole map.
+    //
+    // Every dashboard caller builds its patch by GET-ing providerStrategies,
+    // editing its own provider, and PATCH-ing the map back — and updateSettings
+    // merges TOP-LEVEL keys only, so that write overwrites every other
+    // provider's entry with the client's (possibly stale, possibly concurrent)
+    // snapshot. This is how Meoo's 「余额优先」 disappeared from the DB while the
+    // dropdown still displayed it (2026-11-26). `providerStrategyPatch` carries
+    // ONE provider's override and is merged inside the settings transaction;
+    // an empty/null override removes that provider's entry.
+    const strategyPatch = body.providerStrategyPatch;
+    delete body.providerStrategyPatch;
+    if (strategyPatch && typeof strategyPatch === "object" && !Array.isArray(strategyPatch)) {
+      for (const [pid, override] of Object.entries(strategyPatch)) {
+        await setProviderStrategyOverride(pid, override);
+      }
+    }
+
     const settings = await updateSettings(body);
+    if ("fallbackStrategy" in body || "providerStrategies" in body) accountSessions.reset();
+    else if (strategyPatch && typeof strategyPatch === "object" && !Array.isArray(strategyPatch)) {
+      for (const providerId of Object.keys(strategyPatch)) accountSessions.reset(providerId);
+    }
 
     // The CLI launcher checks for updates before the server exists; it reads a
     // marker file, not the database.
@@ -238,16 +261,16 @@ export async function PATCH(request) {
       }
     }
 
-    // Croli daily check-in and server-claimable rewards (no generated chat).
-    if (Object.prototype.hasOwnProperty.call(body, "croliCheckin")) {
-      if (settings.croliCheckin === true) {
-        import("@/sse/services/croliCheckin.js")
-          .then(({ startCroliCheckin }) => startCroliCheckin())
-          .catch((error) => console.warn("[CroliCheckin] start failed:", error.message));
+    // QuWork daily reward auto-claim (status-gated, never blind-claims).
+    if (Object.prototype.hasOwnProperty.call(body, "quworkCheckin")) {
+      if (settings.quworkCheckin === true) {
+        import("@/sse/services/quworkCheckin.js")
+          .then(({ startQuworkCheckin }) => startQuworkCheckin())
+          .catch((error) => console.warn("[QuworkCheckin] start failed:", error.message));
       } else {
-        import("@/sse/services/croliCheckin.js")
-          .then(({ stopCroliCheckin }) => stopCroliCheckin())
-          .catch((error) => console.warn("[CroliCheckin] stop failed:", error.message));
+        import("@/sse/services/quworkCheckin.js")
+          .then(({ stopQuworkCheckin }) => stopQuworkCheckin())
+          .catch((error) => console.warn("[QuworkCheckin] stop failed:", error.message));
       }
     }
 
@@ -256,7 +279,7 @@ export async function PATCH(request) {
     // with dailyGrantFirst=true starts the scheduler, none stops it. An
     // immediate boot pass rolls back any drain that happened before the toggle
     // was on.
-    if (Object.prototype.hasOwnProperty.call(body, "providerStrategies")) {
+    if (Object.prototype.hasOwnProperty.call(body, "providerStrategies") || strategyPatch) {
       const grantOn = Object.values(settings.providerStrategies || {}).some((o) => o?.dailyGrantFirst === true);
       import("@/sse/services/dailyGrantReset.js")
         .then(({ startDailyGrantReset, stopDailyGrantReset }) => {
